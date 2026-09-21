@@ -12,8 +12,10 @@
 import type { RefObject } from "react";
 
 import type { ChatMessage } from "@/data/chatTypes";
+import { stepsOf } from "@/data/processSteps";
 import { renderMarkdown } from "@/markdown";
 import { Icon } from "./icons";
+import { ProcessTimeline } from "./ProcessTimeline";
 import { SelectionMenu } from "./SelectionMenu";
 
 interface ChatMessagesProps {
@@ -30,6 +32,8 @@ interface ChatMessagesProps {
   onCopyCode?: (code: string) => void;
   onRecordQuestion: (message: ChatMessage) => void;
   onRetry: (message: ChatMessage) => void;
+  /** 生成过程中的状态：正在联网检索、上游不可用正在重试…… */
+  activity?: string | null;
 }
 
 /** 只给回答标个时间，让人知道这段内容是什么时候问出来的 */
@@ -51,6 +55,7 @@ export function ChatMessages({
   onCopyCode,
   onRecordQuestion,
   onRetry,
+  activity,
 }: ChatMessagesProps) {
   /*
    * 代码块的「复制」按钮是 Markdown 渲染出来的 HTML，挂不了 React 事件，
@@ -118,6 +123,8 @@ export function ChatMessages({
               <span className="ai-meta">{formatTime(m.createdAt)}</span>
             </div>
 
+            <ProcessTimeline steps={stepsOf(m)} streaming={m.status === "streaming"} />
+
             <div
               className="ai-body markdown-body"
               onClick={handleBodyClick}
@@ -126,7 +133,7 @@ export function ChatMessages({
 
             {m.status === "streaming" && activeMessageId === m.id && (
               <div className="message-status">
-                正在生成回答…
+                {activity ?? "正在生成回答…"}
                 <i className="typing-caret" />
               </div>
             )}

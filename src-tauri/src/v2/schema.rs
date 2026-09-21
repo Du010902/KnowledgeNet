@@ -902,10 +902,113 @@ pub struct MessageFile {
     pub usage: Option<serde_json::Value>,
     #[serde(default)]
     pub model: Option<String>,
+    /// **读兼容字段：新写入一律是 `None`。**
+    ///
+    /// 它是上一版的「一大段思考过程」，只为了还能读懂旧消息文件而留在结构体里
+    /// （前端在 `steps` 为空时把它当成一条推理步骤显示）。新的思考与工具步骤全部
+    /// 写进 `steps`：那里有顺序、有检索来源，而这个字符串做不到。
+    /// 保留字段而不是删掉，是因为删掉之后旧文件里的这段文字会被 `flatten` 收进
+    /// `extra` 再原样写回，读的人分不清它是废弃字段还是别人的扩展字段。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
+    /// 过程记录：思考与工具调用，按发生顺序。
+    ///
+    /// 为什么落在消息文件里：`content` 只有最终回答，而「当时搜了什么、搜到没有」
+    /// 是重开对话后最需要回看的信息，不存在这里就永远补不回来。
+    ///
+    /// `skip_serializing_if`：没有过程的消息（用户消息、没开检索的回答）不带这个键，
+    /// 文件保持干净，旧版本读到它也只是多一个未知字段。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<ProcessStep>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// 一条消息里发生过的「过程」：思考与工具调用。
+///
+/// 线上形状（前端的 `ProcessStep` 按这个解析，改动前先看 tests/stream_contract.rs）：
+/// `{"kind":"reasoning","text":".."}`
+/// `{"kind":"search","id":..,"query":..,"status":"done","sources":[..],"truncated":false,"elapsedMs":812,"error":null}`
+///
+/// `tag = "kind"` + `rename_all_fields`：判别键与字段名都要是前端认得的 camelCase，
+/// 少了任何一半，前端拿到的就是 `{"kind":"search","elapsed_ms":..}` 这种读不出耗时的形状。
+///
+/// 反直觉的取舍：这里**不做未知 kind 的兜底**（不像 `status` 那样宽松回落）。
+/// 兜底要求有一个「什么都不是」的变体，它会一路序列化回磁盘，把别人的扩展步骤
+/// 变成一个空壳——那比读不出来更糟。代价是以后新增 kind 时，旧版本读这条消息会
+/// 解析失败并跳过**这一条消息**（`load_thread` 会如实计入 `skipped`），
+/// 因此新增 kind 必须同时提升 `MESSAGE_FORMAT_VERSION`。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum ProcessStep {
+    /// 一段思考过程（思考模式下才有）
+    Reasoning { text: String },
+    /// 一次联网检索。`running` 只存在于界面上，落盘时只会是 `done` / `failed`
+    Search {
+        /// 工具调用 id：界面靠它把「进行中」的步骤与后来的结果对上
+        id: String,
+        query: String,
+        /// running / done / failed（持久化时只会是 done / failed）
+        status: String,
+        #[serde(default, deserialize_with = "de_search_sources")]
+        sources: Vec<crate::websearch::SearchSource>,
+        #[serde(default)]
+        truncated: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        elapsed_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+}
+
+/// 检索来源的反序列化镜像。
+///
+/// 为什么不直接用 `SearchSource` 的 derive：`websearch` 是只读的冻结模块，
+/// 它只实现了 `Serialize`（那是发给前端的形状），而消息文件里的检索步骤要能读回来。
+/// 镜像结构与它逐字段对应；缺字段一律落成 `None` 而不是报错——
+/// 少一个标题不该让整条消息读不出来，那样用户丢的是整段对话。
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceMirror {
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    snippet: Option<String>,
+    #[serde(default)]
+    published_at: Option<String>,
+}
+
+fn de_search_sources<'de, D>(deserializer: D) -> Result<Vec<crate::websearch::SearchSource>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Vec::<SourceMirror>::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .map(|item| crate::websearch::SearchSource {
+            url: item.url,
+            title: item.title,
+            snippet: item.snippet,
+            published_at: item.published_at,
+        })
+        .collect())
+}
+
+/// 反序列化过程记录：把显式 `null` 当成空数组。
+///
+/// 前端的 `ChatMessage.steps` 类型是 `ProcessStep[] | null`——既可缺、也可为 null。
+/// `#[serde(default)]` 只兜得住「没有这个键」，兜不住 `"steps": null`，
+/// 而后者会让**整条消息保存失败**：用户丢的是一整条回答，代价与「少几个过程步骤」
+/// 完全不对称。所以命令层用这个函数而不是裸 `Vec`。
+pub fn de_steps_lenient<'de, D>(deserializer: D) -> Result<Vec<ProcessStep>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<Vec<ProcessStep>>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 impl MessageFile {
@@ -923,6 +1026,8 @@ impl MessageFile {
             request_id: None,
             usage: None,
             model: None,
+            reasoning: None,
+            steps: Vec::new(),
             created_at: now.clone(),
             updated_at: now,
             extra: serde_json::Map::new(),
@@ -1145,5 +1250,213 @@ mod tests {
         let mut bad = message.clone();
         bad.role = "robot".to_string();
         assert!(bad.validate_typed().is_err());
+    }
+
+    /* ------------------------------ 过程记录（steps） ------------------------------ */
+
+    /*
+     * 过程记录的线上形状是前端按 `kind` 分流渲染的：判别键错一个字母，
+     * 检索步骤就会掉进「未知类型」被整条丢掉——用户看到的是「当时没搜过」。
+     */
+    #[test]
+    fn 过程步骤的两种变体按_camel_case_出网() {
+        let reasoning = ProcessStep::Reasoning {
+            text: "先看定义".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_value(&reasoning).unwrap(),
+            serde_json::json!({ "kind": "reasoning", "text": "先看定义" })
+        );
+
+        let search = ProcessStep::Search {
+            id: "call_1".to_string(),
+            query: "梯度下降".to_string(),
+            status: "done".to_string(),
+            sources: vec![crate::websearch::SearchSource {
+                url: "https://a.test/gradient".to_string(),
+                title: Some("梯度下降".to_string()),
+                snippet: None,
+                published_at: Some("2024-03-01".to_string()),
+            }],
+            truncated: false,
+            elapsed_ms: Some(812),
+            error: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&search).unwrap(),
+            serde_json::json!({
+                "kind": "search",
+                "id": "call_1",
+                "query": "梯度下降",
+                "status": "done",
+                "sources": [{
+                    "url": "https://a.test/gradient",
+                    "title": "梯度下降",
+                    "snippet": null,
+                    "publishedAt": "2024-03-01",
+                }],
+                "truncated": false,
+                "elapsedMs": 812,
+            }),
+            "error 为 None 时不该出现这个键"
+        );
+
+        // 失败的一步：error 有值，耗时可能缺（没真的检索）
+        let failed = ProcessStep::Search {
+            id: "call_2".to_string(),
+            query: "梯度下降".to_string(),
+            status: "failed".to_string(),
+            sources: Vec::new(),
+            truncated: false,
+            elapsed_ms: None,
+            error: Some("检索接口返回 401".to_string()),
+        };
+        let value = serde_json::to_value(&failed).unwrap();
+        assert_eq!(value["status"], serde_json::json!("failed"));
+        assert_eq!(value["error"], serde_json::json!("检索接口返回 401"));
+        assert!(value.get("elapsedMs").is_none());
+
+        // 回读：前端写回来的形状必须能原样解析（save_message 收的就是它）
+        for step in [reasoning, search, failed] {
+            let text = serde_json::to_string(&step).unwrap();
+            let back: ProcessStep = serde_json::from_str(&text).unwrap();
+            assert_eq!(back, step, "回读后必须与写出去的一致：{text}");
+        }
+    }
+
+    /// 前端可能把可选字段写成显式 null（`elapsedMs: result.elapsedMs ?? null`）。
+    #[test]
+    fn 过程步骤的显式_null_落成_none() {
+        let step: ProcessStep = serde_json::from_str(
+            r#"{"kind":"search","id":"call_1","query":"q","status":"failed","sources":[],"truncated":false,"elapsedMs":null,"error":null}"#,
+        )
+        .unwrap();
+        match step {
+            ProcessStep::Search {
+                elapsed_ms, error, ..
+            } => {
+                assert!(elapsed_ms.is_none());
+                assert!(error.is_none());
+            }
+            other => panic!("解析成了别的变体：{other:?}"),
+        }
+
+        // 来源里缺字段（老版本或前端裁剪过）不能让整条消息读不出来
+        let partial: ProcessStep = serde_json::from_str(
+            r#"{"kind":"search","id":"call_1","query":"q","status":"done","sources":[{"url":"https://a.test"}]}"#,
+        )
+        .unwrap();
+        match partial {
+            ProcessStep::Search {
+                sources,
+                truncated,
+                elapsed_ms,
+                error,
+                ..
+            } => {
+                assert_eq!(sources.len(), 1);
+                assert_eq!(sources[0].url, "https://a.test");
+                assert_eq!(sources[0].title, None);
+                assert!(!truncated);
+                assert!(elapsed_ms.is_none());
+                assert!(error.is_none());
+            }
+            other => panic!("解析成了别的变体：{other:?}"),
+        }
+    }
+
+    /*
+     * 上一版写下的消息文件里没有 steps。它必须照样能读出来（steps 为空），
+     * 否则升级后所有旧对话都会变成「无法解析」被跳过——用户丢的是全部历史。
+     */
+    #[test]
+    fn 没有_steps_的旧消息文件仍能解析且回写时不带这个键() {
+        let text = r#"{
+          "format": "knowledgenet-chat-message",
+          "formatVersion": 1,
+          "id": "0199ffff-0000-7000-8000-0000000000bb",
+          "threadId": "0199ffff-0000-7000-8000-0000000000aa",
+          "sequence": 2,
+          "role": "assistant",
+          "content": "梯度下降是迭代优化方法。",
+          "status": "complete",
+          "reasoning": "上一版留下的思考过程",
+          "createdAt": "2026-09-20T10:00:00.000Z",
+          "updatedAt": "2026-09-20T10:00:05.000Z"
+        }"#;
+        let message: MessageFile = parse_typed(
+            text,
+            MESSAGE_FORMAT,
+            MESSAGE_FORMAT_VERSION,
+            "消息文件",
+            Some(".meta/knowledgenet/chats/t/000002_x.json"),
+        )
+        .unwrap();
+        assert!(message.steps.is_empty(), "旧文件没有 steps，读出来是空");
+        assert_eq!(
+            message.reasoning.as_deref(),
+            Some("上一版留下的思考过程"),
+            "读兼容字段必须原样读出来，前端靠它显示旧消息的思考过程"
+        );
+
+        // 没有过程的消息不该凭空多出一个 steps 键（skip_serializing_if）
+        let value = serde_json::to_value(&message).unwrap();
+        assert!(value.get("steps").is_none());
+
+        // 有过程时才写：顺序即数组顺序
+        let mut with_steps = message.clone();
+        with_steps.steps = vec![
+            ProcessStep::Reasoning {
+                text: "先想".to_string(),
+            },
+            ProcessStep::Search {
+                id: "call_1".to_string(),
+                query: "梯度下降".to_string(),
+                status: "done".to_string(),
+                sources: Vec::new(),
+                truncated: false,
+                elapsed_ms: Some(3),
+                error: None,
+            },
+        ];
+        let round_trip: MessageFile =
+            serde_json::from_str(&serde_json::to_string(&with_steps).unwrap()).unwrap();
+        assert_eq!(round_trip.steps, with_steps.steps);
+    }
+
+    /*
+     * 前端的 `ChatMessage.steps` 类型是 `ProcessStep[] | null`。
+     * `#[serde(default)]` 只兜得住「没有这个键」，显式 null 会让整条消息保存失败——
+     * 用户丢的是一整条回答，所以命令层的 `steps` 走的是这个宽松反序列化。
+     */
+    #[test]
+    fn 命令层入参的_steps_容忍显式_null() {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Probe {
+            #[serde(default, deserialize_with = "de_steps_lenient")]
+            steps: Vec<ProcessStep>,
+        }
+
+        for payload in [
+            r#"{}"#,
+            r#"{"steps": null}"#,
+            r#"{"steps": []}"#,
+        ] {
+            let probe: Probe = serde_json::from_str(payload).unwrap();
+            assert!(probe.steps.is_empty(), "{payload} 应当读成空步骤");
+        }
+
+        // 真的带了步骤时照样读出来（不能为了容忍 null 把内容也丢了）
+        let probe: Probe = serde_json::from_str(
+            r#"{"steps":[{"kind":"reasoning","text":"先想"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            probe.steps,
+            vec![ProcessStep::Reasoning {
+                text: "先想".to_string()
+            }]
+        );
     }
 }

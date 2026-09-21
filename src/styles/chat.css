@@ -191,6 +191,260 @@
   margin-bottom: 0;
 }
 
+/*
+ * 过程时间线：正文之上的一段按顺序排列的「思考 / 检索」条目。
+ *
+ * 视觉上刻意比正文弱一档（更小、次级色、左侧一道细线）：
+ * 它的用途是「看得出模型做了什么」，抢了正文的注意力就本末倒置了。
+ * 生成中左线用强调色，是在说「这一步还在进行」。
+ */
+.process {
+  margin: 0 0 14px;
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.process.is-live {
+  border-left-color: var(--accent);
+}
+
+.process > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+/* 自定义箭头：默认三角在深色主题下几乎看不见 */
+.process > summary::-webkit-details-marker {
+  display: none;
+}
+
+.process > summary::before {
+  content: "▸";
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.process[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.process-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.process-title .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.process.is-live .process-title {
+  color: var(--accent-text);
+}
+
+.process-meta {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.process-steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.process-step {
+  min-width: 0;
+}
+
+/* 每条步骤自己也是一个折叠项：思考可能几千字，检索可能几十条来源 */
+.step > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.step > summary::before {
+  content: "▸";
+  flex: none;
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.step[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
+.step-mark .icon {
+  width: 11px;
+  height: 11px;
+}
+
+/*
+ * 思考节点的标记：一个小圆点，占位与检索图标的方块同宽，保证两类条目的文字左对齐。
+ * 思考不配图标——它在一列里的位置已经说明了类型，再加图形只会和助手头像抢注意力。
+ */
+.step-node {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.step-node::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.step-label {
+  flex: none;
+  color: var(--secondary);
+}
+
+/* 收起时的单行预览：不点开也能看出这一步在想什么 */
+.step-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 展开之后正文就在下面，预览再留着只是重复 */
+.step[open] > summary .step-preview {
+  display: none;
+}
+
+.step-meta {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 检索进行中：这一步是当前焦点，给它强调色 */
+.process-step.is-search.is-running .step-mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.process-step.is-search.is-failed .step-mark {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.step-main {
+  min-width: 0;
+  /* 与摘要里的文字对齐：箭头(≈9px) + 间距(8) + 标记(18) + 间距(8) */
+  padding: 6px 0 0 43px;
+}
+
+.step-query {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--secondary);
+}
+
+.step-state {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.step-error {
+  margin: 0;
+  color: var(--danger);
+  word-break: break-word;
+}
+
+/*
+ * 来源清单：不再限制条数（上游给多少列多少），改由这一块自己滚。
+ * 一次检索可能有几十条，铺开就是几百像素。
+ */
+.step-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.step-sources a {
+  color: var(--accent-text);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.step-sources a:hover {
+  text-decoration: underline;
+}
+
+.step-snippet {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.step-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+/*
+ * 推理正文：纯文本，保留换行；半截的 Markdown 定界符按原样显示。
+ * 长推理可以滚，但不让它把整条回答顶出屏幕。
+ */
+.step-body {
+  margin: 6px 0 0 43px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .message-actions {
   display: flex;
   gap: 4px;
@@ -367,7 +621,7 @@
   box-shadow: none;
 }
 
-/* 工具行：模型 / 深度思考 / 快捷键，三者同一行（参考图 .composer-tools） */
+/* 工具行：模型 / 深度思考 / 联网 / 上下文用量 / 快捷键，同一行（参考图 .composer-tools） */
 .composer-tools {
   display: flex;
   align-items: center;
@@ -413,6 +667,17 @@
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+/*
+ * 上下文用量：只读参考信息，不参与压缩。
+ * flex: none 让它保持可读长度而不是被挤成一串省略号；
+ * 窄屏下整条隐藏（见文件末尾的媒体查询）——它挤掉模型名或开关才是真的亏。
+ */
+.context-usage {
+  flex: none;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 生成中的状态比快捷键重要：它占同样的位置，但用强调色并且永远不隐藏 */
@@ -1046,6 +1311,11 @@
 
   .model-label {
     max-width: 34vw;
+  }
+
+  /* 用量是参考信息：窄屏下先让位给模型名与两个开关（验收清单 P2-2 不许横向溢出） */
+  .composer-tools .context-usage {
+    display: none;
   }
 }
 

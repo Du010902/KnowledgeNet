@@ -12,6 +12,7 @@
  *    坏文件要如实显示为坏文件，而不是被静默改写。
  */
 import { RepositoryError } from "../errors.ts";
+import type { ProcessStep } from "../chatTypes.ts";
 import { escapesLibrary, normalizeRel, requireSafeRelative } from "./paths.ts";
 
 /* --------------------------------- 常量 --------------------------------- */
@@ -912,6 +913,10 @@ export interface V2MessageFile extends Extensible {
   requestId: string | null;
   usage: unknown;
   model: string | null;
+  /** 过程记录：思考与工具调用，按发生顺序；空数组表示没有 */
+  steps: ProcessStep[];
+  /** 上一版留下的纯文本思考过程，只用于读旧消息 */
+  reasoning: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -928,6 +933,8 @@ export function newMessageFile(input: {
   requestId?: string | null;
   usage?: unknown;
   model?: string | null;
+  steps?: ProcessStep[];
+  reasoning?: string | null;
 }): V2MessageFile {
   return {
     format: MESSAGE_FORMAT,
@@ -942,6 +949,8 @@ export function newMessageFile(input: {
     requestId: input.requestId ?? null,
     usage: input.usage ?? null,
     model: input.model ?? null,
+    steps: input.steps ?? [],
+    reasoning: input.reasoning ?? null,
     createdAt: input.now,
     updatedAt: input.now,
   };
@@ -964,6 +973,8 @@ export function parseMessageFile(text: string, relativePath: string | null = nul
     requestId,
     usage,
     model,
+    steps,
+    reasoning,
     createdAt,
     updatedAt,
     ...extra
@@ -993,6 +1004,14 @@ export function parseMessageFile(text: string, relativePath: string | null = nul
     // `usage` 是自由 JSON（用量原文），null 表示没有
     usage: usage === undefined ? null : usage,
     model: optionalString(model, what, "model", relativePath),
+    /*
+     * `steps` 是结构化的过程记录。这里只做「必须是数组」的检查，不逐字段校验：
+     * 它的形状由 aiProvider 的事件契约决定，而演示后端的职责是原样存取——
+     * 在这里再校验一遍等于把同一份契约维护两遍，加一个步骤类型就要改三处。
+     */
+    steps: Array.isArray(steps) ? (steps as ProcessStep[]) : [],
+    // 老消息文件没有这个键：缺失即「没有思考过程」，不是错误
+    reasoning: optionalString(reasoning, what, "reasoning", relativePath),
     createdAt: requireIsoString(createdAt, what, "createdAt", relativePath),
     updatedAt: requireIsoString(updatedAt, what, "updatedAt", relativePath),
     ...extra,

@@ -17,6 +17,38 @@ export type MessageStatus =
 
 export type ChatRole = "system" | "user" | "assistant";
 
+/** 一条可引用的检索来源（与 `WebSearchSource` 同形，这里只做类型引用避免耦合） */
+export interface ProcessSource {
+  url: string;
+  title?: string | null;
+  snippet?: string | null;
+  publishedAt?: string | null;
+}
+
+/**
+ * 过程记录的一步。
+ *
+ * 存在的理由：一次回答不只是「一段思考 + 一段正文」。模型可能先想一轮、调用检索、
+ * 拿到结果再想一轮，最后才回答——这些步骤的顺序本身就是信息（哪一步改变了结论）。
+ * 把它们压成一段文字，用户就只能看到一整块推理，看不出「中间查了什么」。
+ *
+ * 顺序即数组顺序；`kind` 是可辨识联合的判别键，前端按它渲染不同的条目。
+ */
+export type ProcessStep =
+  | { kind: "reasoning"; text: string }
+  | {
+      kind: "search";
+      /** 工具调用 id，用来把 running 的步骤和后来的结果对上 */
+      id: string;
+      query: string;
+      /** running 只存在于界面上；落盘时一定是 done 或 failed */
+      status: "running" | "done" | "failed";
+      sources: ProcessSource[];
+      truncated: boolean;
+      elapsedMs?: number | null;
+      error?: string | null;
+    };
+
 /** 一个对话固定属于一个知识节点；同一节点可以有多个对话。 */
 export interface ChatThread {
   id: string;
@@ -62,6 +94,21 @@ export interface ChatMessage {
   usage?: string | null;
   /** 生成这条消息的模型名（写进消息文件，便于以后解释「当时是什么答的」） */
   model?: string | null;
+  /**
+   * 过程记录：按发生顺序记下这次回答里的思考与工具调用。
+   *
+   * 它随消息落盘、可在界面上回看（「当时查了什么、查到了什么」），但**不回传给模型**：
+   * 官方规则只要求工具调用轮回传 `reasoning_content`，其余轮次会被忽略；
+   * 推理往往比回答还长，回传只会持续放大 token 消耗。
+   */
+  steps?: ProcessStep[] | null;
+  /**
+   * 上一版留下的纯文本思考过程，**只用于读旧消息**。
+   *
+   * 新消息一律写 `steps`；读的时候 `steps` 为空而它有值，就把它当成一条推理步骤显示，
+   * 这样上一版存下的对话不会突然看不见思考过程。
+   */
+  reasoning?: string | null;
   createdAt: number;
   /** 最后一次写入时间；缺省时与 `createdAt` 相同 */
   updatedAt?: number;

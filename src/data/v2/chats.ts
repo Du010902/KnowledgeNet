@@ -267,6 +267,8 @@ export function messageToFile(message: ChatMessage, sequence: number): V2Message
     requestId: message.requestId ?? null,
     usage: usageToFile(message.usage),
     model: message.model ?? null,
+    steps: message.steps ?? [],
+    reasoning: message.reasoning ?? null,
   });
 }
 
@@ -283,6 +285,8 @@ export function messageFromFile(file: V2MessageFile): ChatMessage {
     requestId: file.requestId,
     usage: usageFromFile(file.usage),
     model: file.model,
+    steps: file.steps ?? [],
+    reasoning: file.reasoning,
     createdAt: created,
     updatedAt: updated,
   };

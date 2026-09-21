@@ -23,6 +23,21 @@ import { create } from "zustand";
 
 import { getAiProvider, hasRealAi, type AiConfig, type ChatTurn } from "@/data/aiProvider";
 import { defaultAiConfig } from "@/data/aiProvider";
+import {
+  clampText,
+  estimateTurnTokens,
+  historyRetainBudget,
+  MAX_NOTE_CHARS,
+  selectHistory,
+  summarizeUsage,
+  type ContextUsage,
+} from "@/data/contextBudget";
+import {
+  appendReasoning,
+  finishSearch,
+  startSearch,
+  stepsOf,
+} from "@/data/processSteps";
 import type { Repository } from "@/data/repository";
 import { getCurrentSession } from "@/data/session";
 import { RepositoryError, toRepositoryError } from "@/data/errors";
@@ -59,7 +74,13 @@ export function bindChatHost(next: ChatHost): void {
   host = next;
 }
 
-const MAX_CONTEXT_MESSAGES = 20;
+/**
+ * 上下文历史不再按「条数」截断。
+ *
+ * 条数与 token 完全不成比例：一条长回答能顶几十条短问答，按条数截断要么浪费预算，
+ * 要么超窗口。这里改成按 token 预算从尾部挑（见 `@/data/contextBudget`），
+ * 预算由配置里的上下文窗口算出。
+ */
 
 /**
  * 按 ID 去重，保留最后一条。
@@ -111,6 +132,15 @@ interface ChatState {
   /** 打开某个对话时要恢复到的阅读位置（书签/来源定位用） */
   pendingScroll: ScrollRequest | null;
   error: string | null;
+  /**
+   * 生成过程中的状态提示：正在联网检索、上游不可用正在重试……
+   *
+   * 与 `error` 分开：它不是失败（这次提问还有救），报成错误会让使用者以为已经废了。
+   * 生成结束或取消后必须清空，否则界面会一直停在「正在检索」。
+   */
+  activity: string | null;
+  /** 最近一次组装请求时的上下文用量估算，用于让使用者看见预算压力 */
+  contextUsage: ContextUsage | null;
   aiLabel: string;
   configured: boolean;
   /** 已记下的来源（按 `fromNodeId:edgeId` 分组），只作为界面缓存 */
@@ -157,6 +187,8 @@ interface ChatState {
   saveApiKey(key: string): Promise<void>;
   clearApiKey(): Promise<void>;
   setThinking(thinking: boolean): Promise<void>;
+  /** 只切「联网检索」一项 */
+  setWebSearch(webSearch: boolean): Promise<void>;
   requestScroll(request: Omit<ScrollRequest, "nonce">): void;
   bookmarkFor(nodeId: string): Bookmark | undefined;
   /** 当前线程的消息（懒加载下 `messages` 只含当前线程） */
@@ -409,7 +441,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       .filter((m) => m.id !== assistantId && m.id !== userId && m.status !== "failed");
     const lastAssistant = usable.map((m) => m.role).lastIndexOf("assistant");
     if (lastAssistant < 0) return [];
-    return usable.slice(0, lastAssistant + 1).slice(-MAX_CONTEXT_MESSAGES);
+    // 截断交给 assembleTurns 按 token 预算做：条数不能反映真实占用
+    return usable.slice(0, lastAssistant + 1);
   }
 
   /** 列出某个节点的线程头（切节点时使用；失败返回空列表并报错） */
@@ -481,14 +514,26 @@ export const useChatStore = create<ChatState>((set, get) => {
         error: null,
       }));
 
-      const turns = assembleTurns(
+      /*
+       * 检索不再由这里发起。
+       *
+       * 开关打开时，Rust 会把 `web_search` 作为工具声明给模型，由模型自己决定搜不搜、
+       * 搜几次；每一步都以 toolCall / toolResult 事件回来，下面按顺序记进过程记录。
+       * 前端因此只做两件事：把事件拼成步骤、把步骤贴到消息上。
+       */
+      const config = await loadConfig();
+      const note = await readNodeNote(nodeId);
+
+      const assembled = assembleTurns(
         nodeId,
         contextHistory(threadId, assistantMessage.id, userMessage.id),
         question,
-        await readNodeNote(nodeId),
+        note,
+        { contextWindow: config.contextWindow ?? null },
       );
+      set({ contextUsage: assembled.usage });
 
-      const requestId = await getAiProvider().stream(turns, await loadConfig(), {
+      const requestId = await getAiProvider().stream(assembled.turns, config, {
         onDelta: (text) => {
           // 只处理仍然属于当前活动请求、且仍属于当前知识库的片段
           if (!isCurrent(token) || currentSessionId() !== sessionId) return;
@@ -496,12 +541,45 @@ export const useChatStore = create<ChatState>((set, get) => {
           if (!current || current.status !== "streaming") return;
           upsertMessageLocal({ ...current, content: current.content + text });
         },
+        onReasoning: (text) => {
+          /*
+           * 推理增量并进过程记录的当前推理步骤，不拼进正文。
+           *
+           * 检索之后模型会再想一轮，那部分必须另起一条步骤（`appendReasoning` 负责判断），
+           * 否则「查之前怎么想」和「查之后怎么想」会被并成一段，看不出检索改变了什么。
+           */
+          if (!isCurrent(token) || currentSessionId() !== sessionId) return;
+          const current = get().messages.find((m) => m.id === assistantMessage.id);
+          if (!current || current.status !== "streaming") return;
+          upsertMessageLocal({ ...current, steps: appendReasoning(stepsOf(current), text) });
+        },
+        onToolCall: (call) => {
+          if (!isCurrent(token) || currentSessionId() !== sessionId) return;
+          const current = get().messages.find((m) => m.id === assistantMessage.id);
+          if (!current || current.status !== "streaming") return;
+          upsertMessageLocal({
+            ...current,
+            steps: startSearch(stepsOf(current), { id: call.id, query: call.query }),
+          });
+        },
+        onToolResult: (result) => {
+          if (!isCurrent(token) || currentSessionId() !== sessionId) return;
+          const current = get().messages.find((m) => m.id === assistantMessage.id);
+          if (!current || current.status !== "streaming") return;
+          upsertMessageLocal({ ...current, steps: finishSearch(stepsOf(current), result) });
+        },
+        onStatus: (text) => {
+          // 重试之类的过程状态：不是失败，所以不写 error
+          if (!isCurrent(token) || currentSessionId() !== sessionId) return;
+          set({ activity: text });
+        },
         onDone: (info) => {
           if (currentSessionId() !== sessionId) {
             terminate(token);
             return;
           }
           if (!terminate(token)) return;
+          set({ activity: null });
           const current = get().messages.find((m) => m.id === assistantMessage.id);
           if (current) {
             /*
@@ -545,6 +623,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             return;
           }
           if (!terminate(token)) return;
+          set({ activity: null });
           const current = get().messages.find((m) => m.id === assistantMessage.id);
           if (current) {
             // 失败的回答不能标记为完整；保留已生成的片段便于排查
@@ -569,6 +648,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       publishActive();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // 组装或检索阶段的异常同样要把「正在检索」的状态收掉，否则界面会一直转
+      if (isCurrent(token)) set({ activity: null });
       if (terminate(token) && currentSessionId() === sessionId) {
         const current = get().messages.find((m) => m.id === assistantMessage.id);
         if (current) {
@@ -593,6 +674,8 @@ export const useChatStore = create<ChatState>((set, get) => {
     activeRequests: {},
     pendingScroll: null,
     error: null,
+    activity: null,
+    contextUsage: null,
     aiLabel: getAiProvider().label,
     configured: false,
     evidence: {},
@@ -932,6 +1015,8 @@ export const useChatStore = create<ChatState>((set, get) => {
         activeRequests: {},
         pendingScroll: null,
         error: null,
+        activity: null,
+        contextUsage: null,
         evidence: {},
       });
     },
@@ -966,6 +1051,12 @@ export const useChatStore = create<ChatState>((set, get) => {
       // 先读回当前配置再改一项：组件不应该持有整份配置的副本
       const settings = await provider.loadSettings();
       await provider.saveConfig({ ...settings.config, thinking });
+    },
+
+    async setWebSearch(webSearch) {
+      const provider = getAiProvider();
+      const settings = await provider.loadSettings();
+      await provider.saveConfig({ ...settings.config, webSearch });
     },
 
     /* -------------------------------- 查询 -------------------------------- */
@@ -1017,22 +1108,14 @@ function describeChatError(err: unknown): string {
 }
 
 /**
- * 组装发给 AI 的消息。
+ * 静态系统提示：**必须逐字节稳定**。
  *
- * 只带当前节点、当前对话历史与直接依赖的简短状态；
- * 其它对话、整张图和全部笔记默认不发送——既省 token，也避免引入无关上下文。
+ * 这里刻意不出现知识点、位置、笔记、检索结果这类每轮都在变的内容：
+ * 它们一旦混进来，第一条消息每次都不同，上游的前缀缓存从第一个 token 起就失效。
+ * 带上「当前知识点」看起来更贴心，实际代价是每一轮都按全价重算整个上下文。
  */
-function assembleTurns(
-  nodeId: string,
-  history: ChatMessage[],
-  question: string,
-  note: string,
-): ChatTurn[] {
-  const graph = host.graph();
-  const node = graph.nodes.find((n) => n.id === nodeId);
-  const prereqs = node ? prerequisitesOf(graph, nodeId) : [];
-
-  const lines: string[] = [
+function staticSystemPrompt(): string {
+  return [
     "你是学习助手，帮助使用者理解他正在攻克的知识点。",
     "要求：",
     "- 围绕当前知识点解释，不要发散到无关内容。",
@@ -1040,10 +1123,24 @@ function assembleTurns(
     "- 把「理解当前内容所必需的前置知识」和「延伸阅读」明确区分开。",
     "- 一次不要展开太多分支，优先讲清楚主线。",
     "- 不要替使用者判定他已经理解某个知识点。",
-    "",
-    `当前知识点：${node?.title ?? "（未知）"}`,
-  ];
+    "- 当他表示不理解某个概念时，先解释那个概念，再说明它与当前知识点的关系。",
+    "- 标记为「系统提供的…」的内容不是使用者的发言，只是随请求附上的背景信息。",
+  ].join("\n");
+}
 
+/**
+ * 动态学习上下文：每轮重新生成，作为独立的一轮 user 消息追加在历史之后。
+ *
+ * 放在末尾而不是 system 里，是为了让「会变的部分」尽量靠后：前面的 system 与历史
+ * 因此可以逐字节复用。开头的说明句是必须的——它要和真实发言区分开，
+ * 否则模型会把这段背景当成使用者说的话。
+ */
+function buildContextSnapshot(nodeId: string, note: string): string {
+  const graph = host.graph();
+  const node = graph.nodes.find((n) => n.id === nodeId);
+  const prereqs = node ? prerequisitesOf(graph, nodeId) : [];
+
+  const lines: string[] = ["[系统提供的学习上下文，不是使用者的发言]", `当前知识点：${node?.title ?? "（未知）"}`];
   if (node?.relativePath) lines.push(`它在知识库里的位置：${node.relativePath}`);
   if (prereqs.length > 0) {
     const done = prereqs.filter((p) => p.status === "done").map((p) => p.title);
@@ -1053,21 +1150,87 @@ function assembleTurns(
   }
   /*
    * 笔记正文不随节点元数据一起载入（一万个节点时那是全部 Markdown），
-   * 提问时按需读当前节点这一份即可。
+   * 提问时按需读当前节点这一份即可。笔记本身也可能很长，所以按上限截断——
+   * 一只笔记吃掉整轮预算，就会把历史挤出去。
    */
-  if (note.trim()) {
-    lines.push("", "使用者为这个知识点记录的笔记：", note.trim());
+  const clamped = clampText(note, MAX_NOTE_CHARS);
+  if (clamped.text) {
+    lines.push("", "使用者为这个知识点记录的笔记：", clamped.text);
+    if (clamped.truncated) lines.push(`（笔记过长，只取前 ${MAX_NOTE_CHARS} 字）`);
   }
-  lines.push("", "当他表示不理解某个概念时，先解释那个概念，再说明它与当前知识点的关系。");
+  return lines.join("\n");
+}
 
-  const turns: ChatTurn[] = [{ role: "system", content: lines.join("\n") }];
-  for (const m of history) {
+/**
+ * 检索结果不再由前端拼进上下文。
+ *
+ * 工具化之后这件事在 Rust 侧完成：模型发起 `web_search`、Rust 执行、把结果以
+ * `role:"tool"` 消息回灌，并同时把 toolCall / toolResult 事件推给界面。
+ * 前端因此只负责把事件记成过程步骤——**同一份事实只有一个来源**，
+ * 否则「界面显示查到了 8 条」与「模型实际看到几条」迟早会对不上。
+ */
+
+/** 组装结果：消息、分段用量，以及被预算丢掉的历史条数 */
+interface AssembledRequest {
+  turns: ChatTurn[];
+  usage: ContextUsage;
+  /** 因为没有摘要能力而被截断丢掉的历史条数，>0 时界面要如实说明 */
+  droppedHistory: number;
+}
+
+/**
+ * 组装发给 AI 的消息。
+ *
+ * 顺序与「谁先变化」严格对应，这是为了让前缀缓存尽量命中：
+ *
+ * ```text
+ * [system 静态指令]          几乎不变
+ * [历史]                     只在末尾追加
+ * [user 学习上下文]          每轮可能变（笔记、前置知识状态）
+ * [user 联网检索结果]        开了检索才出现
+ * [user 当前问题]            每次都变
+ * ```
+ *
+ * 只带当前节点、当前对话历史与直接依赖的简短状态；
+ * 其它对话、整张图和全部笔记默认不发送——既省 token，也避免引入无关上下文。
+ */
+function assembleTurns(
+  nodeId: string,
+  history: ChatMessage[],
+  question: string,
+  note: string,
+  options: { contextWindow?: number | null } = {},
+): AssembledRequest {
+  const systemText = staticSystemPrompt();
+  const contextText = buildContextSnapshot(nodeId, note);
+  const contextWindow = options.contextWindow ?? undefined;
+
+  const selection = selectHistory(history, historyRetainBudget(contextWindow));
+
+  const turns: ChatTurn[] = [{ role: "system", content: systemText }];
+  for (const m of selection.kept) {
     if (m.role === "user" || m.role === "assistant") {
       turns.push({ role: m.role, content: m.content });
     }
   }
+  if (contextText) turns.push({ role: "user", content: contextText });
   if (question) turns.push({ role: "user", content: question });
-  return turns;
+
+  const usage: ContextUsage = {
+    ...summarizeUsage(
+      {
+        system: estimateTurnTokens(turns[0]!),
+        context: contextText ? estimateTurnTokens({ role: "user", content: contextText }) : 0,
+        // 检索结果由 Rust 在执行工具后自行回灌，不在这份组装里，因此这一项恒为 0
+        search: 0,
+        history: selection.tokens,
+        question: question ? estimateTurnTokens({ role: "user", content: question }) : 0,
+      },
+      contextWindow,
+    ),
+    droppedHistory: selection.droppedCount,
+  };
+  return { turns, usage, droppedHistory: selection.droppedCount };
 }
 
 /** 界面上用于提示「这是模拟回答」 */

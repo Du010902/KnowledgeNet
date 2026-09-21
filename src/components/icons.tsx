@@ -13,6 +13,15 @@ const PATHS = {
   network:
     '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.5 6.2l7 .6M7 8.5l2.2 7M16.5 9l-5 6.5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  /**
+   * 过程/步骤：一条竖线串起三个节点。
+   *
+   * 单独画一个而不是借用 sparkles：sparkles 已经表示「这是 AI 的回答」（助手头像），
+   * 再用它当「过程」标题和每一段思考的标记，三个同样的图形堆在一列里，
+   * 谁也说不清哪个是身份、哪个是步骤。
+   */
+  steps:
+    '<path d="M6 5v14"/><circle cx="6" cy="8" r="1.6"/><circle cx="6" cy="13" r="1.6"/><circle cx="6" cy="18" r="1.6"/><path d="M11 8h8M11 13h6M11 18h9"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   minus: '<path d="M5 12h14"/>',
   moon: '<path d="M20.5 14.1A8.5 8.5 0 0 1 9.9 3.5a8.5 8.5 0 1 0 10.6 10.6Z"/>',

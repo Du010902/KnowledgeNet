@@ -24,6 +24,7 @@ pub mod library;
 pub mod models;
 pub mod paths;
 pub mod v2;
+pub mod websearch;
 
 use tauri::{Manager, WindowEvent};
 
@@ -121,6 +122,9 @@ pub fn run() {
             v2::commands::test_ai_connection,
             v2::commands::start_chat,
             v2::commands::cancel_chat,
+            /* 联网检索 */
+            v2::commands::web_search,
+            v2::commands::test_web_search,
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {

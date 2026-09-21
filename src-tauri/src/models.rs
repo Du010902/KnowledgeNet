@@ -937,6 +937,12 @@ pub struct ChatMessage {
     /// API 实际返回的用量（JSON 原文）
     #[serde(default)]
     pub usage: Option<String>,
+    /// 模型的思考过程（只在思考模式下产生）。
+    ///
+    /// 属于正文类字段：写盘前不做凭据检查（检查的只有元数据字段），
+    /// 但也不进上下文历史——重新提问时只发 `content`。
+    #[serde(default)]
+    pub reasoning: Option<String>,
     pub created_at: i64,
 }
 

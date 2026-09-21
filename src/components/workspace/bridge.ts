@@ -19,6 +19,7 @@ import { useChatStore } from "@/chatStore";
 import { useStore } from "@/store";
 import { useUiStore } from "@/uiStore";
 import type { Bookmark, ChatMessage, ChatThread } from "@/data/chatTypes";
+import type { ContextUsage } from "@/data/contextBudget";
 import type { ScanReport, RecentLibrary } from "@/data/types";
 import type { Evidence } from "@/data/types";
 import type { Repository } from "@/data/repository";
@@ -544,6 +545,14 @@ export interface ChatSurface {
   activeRequests: Record<string, ActiveRequestLike>;
   pendingScroll: ScrollRequestLike | null;
   error: string | null;
+  /**
+   * 生成过程中的状态：正在联网检索、上游不可用正在重试……
+   *
+   * 可选：旧实现没有这个字段，缺席时界面只是不显示过程状态，不该报错。
+   */
+  activity?: string | null;
+  /** 最近一次组装请求的上下文用量估算；旧实现缺席时输入区不显示这一项 */
+  contextUsage?: ContextUsage | null;
   aiLabel: string;
   configured: boolean;
 }
@@ -691,6 +700,16 @@ export function chatApi() {
     /** 只切「深度思考」一项；旧实现与新实现同名，缺席时输入区的开关不渲染 */
     async setThinking(thinking: boolean): Promise<void> {
       await invoke(state(), ["setThinking"], thinking);
+    },
+
+    /**
+     * 只切「联网检索」一项。
+     *
+     * 与 setThinking 同样走状态层：这项设置要在提问前那一刻改，
+     * 不能在设置弹窗里改完再回来问。缺席时输入区不渲染这个开关。
+     */
+    async setWebSearch(webSearch: boolean): Promise<void> {
+      await invoke(state(), ["setWebSearch"], webSearch);
     },
 
     setError(message: string | null): void {

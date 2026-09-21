@@ -24,6 +24,21 @@ export interface AiConfig {
   thinking: boolean;
   maxTokens?: number | null;
   temperature?: number | null;
+  /**
+   * 联网检索默认关闭：检索会把问题（检索词）发给 DeepSeek，
+   * 与「只发送当前知识点」的隐私承诺相比是额外的一步，必须由使用者主动开启。
+   */
+  webSearch?: boolean;
+  /**
+   * 检索端点。与会话端点**相互独立**：检索走的是 Anthropic 兼容的 Messages 接口，
+   * 由服务端工具执行搜索，和 /chat/completions 不是同一条路。
+   * 留空使用 https://api.deepseek.com/anthropic/v1
+   */
+  searchBaseUrl?: string | null;
+  /** 检索用的模型名（Anthropic 格式）。留空使用 deepseek-v4-flash */
+  searchModel?: string | null;
+  /** 上下文窗口；留空按 128K 处理。只影响本地预算估算，不发给上游 */
+  contextWindow?: number | null;
 }
 
 export const DEFAULT_MODEL = "deepseek-flash";
@@ -41,7 +56,34 @@ export function defaultAiConfig(): AiConfig {
     thinking: false,
     maxTokens: DEFAULT_MAX_TOKENS,
     temperature: null,
+    webSearch: false,
+    searchBaseUrl: null,
+    searchModel: null,
+    contextWindow: null,
   };
+}
+
+/**
+ * 一条可引用的检索来源。
+ *
+ * 只有 `url` 是必需的：不是每个后端都返回标题、摘录与日期。为了凑齐字段而编造内容
+ * 会让界面撒谎，所以缺什么就留空，展示时退化成主机名。
+ */
+export interface WebSearchSource {
+  url: string;
+  title?: string | null;
+  snippet?: string | null;
+  /** 发布时间/抓取时间，由检索后端给出的原始字符串 */
+  publishedAt?: string | null;
+}
+
+/** 一次联网检索的结果 */
+export interface WebSearchOutcome {
+  /** 实际发出的检索词（界面要如实显示，使用者才知道问题被怎么发出去了） */
+  query: string;
+  sources: WebSearchSource[];
+  /** 后端返回的来源被上限截断过 */
+  truncated: boolean;
 }
 
 export interface AiSettings {
@@ -65,6 +107,30 @@ export interface TestResult {
  */
 export type StreamEvent =
   | { type: "delta"; text: string }
+  /**
+   * 思考过程的增量（只在思考模式下出现）。
+   *
+   * 与 `delta` 分开：正文会进消息正文、会进下一轮上下文，
+   * 思考过程只作为可折叠的过程记录展示与留档。
+   */
+  | { type: "reasoning"; text: string }
+  /**
+   * 模型发起了一次工具调用。
+   *
+   * `query` 是从调用参数里解出来的检索词（不是原始 JSON）：界面要显示「查了什么」，
+   * 让前端再解析一遍参数只会把「参数怎么解」这件事复制到两个地方。
+   */
+  | { type: "toolCall"; id: string; name: string; query: string; round: number }
+  /** 工具调用有了结果（成功或失败都走这里，失败用 ok=false + error 说明） */
+  | {
+      type: "toolResult";
+      id: string;
+      ok: boolean;
+      sources: WebSearchSource[];
+      truncated: boolean;
+      elapsedMs?: number | null;
+      error?: string | null;
+    }
   | {
       type: "done";
       finishReason?: string | null;
@@ -72,10 +138,28 @@ export type StreamEvent =
       /** 上游是否正常结束（收到 [DONE] 或结束原因）；false 表示连接中途断掉 */
       completed: boolean;
     }
+  /**
+   * 过程状态：上游暂时不可用正在重试、正在联网检索之类。
+   * 与 `error` 分开，是因为它不是失败——把「正在重试」报成错误会让使用者以为这次提问已经废了。
+   */
+  | { type: "status"; text: string }
   | { type: "error"; message: string };
 
 export interface StreamHandlers {
   onDelta: (text: string) => void;
+  /** 可选：思考过程增量。没实现时忽略，不影响生成。 */
+  onReasoning?: (text: string) => void;
+  /** 可选：模型发起工具调用（目前只有联网检索） */
+  onToolCall?: (call: { id: string; name: string; query: string; round: number }) => void;
+  /** 可选：工具调用结果 */
+  onToolResult?: (result: {
+    id: string;
+    ok: boolean;
+    sources: WebSearchSource[];
+    truncated: boolean;
+    elapsedMs?: number | null;
+    error?: string | null;
+  }) => void;
   onDone: (info: {
     /** 停止原因：`length` 表示达到输出上限被截断，`stop` 为正常结束 */
     finishReason?: string | null;
@@ -83,6 +167,8 @@ export interface StreamHandlers {
     /** 是否收到正常的结束标记。为 false 时内容是半截的，不能算完整回答。 */
     completed: boolean;
   }) => void;
+  /** 可选：过程状态提示。没实现时忽略，不影响生成。 */
+  onStatus?: (text: string) => void;
   onError: (message: string) => void;
 }
 
@@ -96,6 +182,15 @@ export interface AiProvider {
   saveApiKey(key: string): Promise<void>;
   clearApiKey(): Promise<void>;
   testConnection(config: AiConfig): Promise<TestResult>;
+  /**
+   * 检索一次网页，返回可引用的来源。
+   *
+   * 只做检索、不生成答案：检索词与来源要能被界面如实展示，而「怎么用这些来源」
+   * 交给主对话那条请求，检索结果作为不可信数据注入上下文。
+   */
+  webSearch(query: string): Promise<WebSearchOutcome>;
+  /** 用一次极小检索验证检索端点与密钥是否可用 */
+  testWebSearch(config: AiConfig): Promise<TestResult>;
   /**
    * 发起一次流式生成。返回 requestId，调用方用它来停止生成。
    */
@@ -149,6 +244,18 @@ class DeepSeekProvider implements AiProvider {
     return await invoke<TestResult>("test_ai_connection", { config });
   }
 
+  /**
+   * 联网检索。命令只带检索词：密钥与端点配置留在 Rust 侧读，
+   * 前端拿不到 Key，也不需要知道端点是怎么解析出来的。
+   */
+  async webSearch(query: string): Promise<WebSearchOutcome> {
+    return await invoke<WebSearchOutcome>("web_search", { query });
+  }
+
+  async testWebSearch(config: AiConfig): Promise<TestResult> {
+    return await invoke<TestResult>("test_web_search", { config });
+  }
+
   async stream(
     messages: ChatTurn[],
     config: AiConfig,
@@ -159,6 +266,10 @@ class DeepSeekProvider implements AiProvider {
     const channel = new Channel<StreamEvent>();
     channel.onmessage = (event) => {
       if (event.type === "delta") handlers.onDelta(event.text);
+      else if (event.type === "reasoning") handlers.onReasoning?.(event.text);
+      else if (event.type === "toolCall") handlers.onToolCall?.(event);
+      else if (event.type === "toolResult") handlers.onToolResult?.(event);
+      else if (event.type === "status") handlers.onStatus?.(event.text);
       else if (event.type === "done") handlers.onDone(event);
       else if (event.type === "error") handlers.onError(event.message);
     };
@@ -210,6 +321,37 @@ class MockProvider implements AiProvider {
     return { ok: true, message: "模拟服务始终可用", model: "mock", latencyMs: 0 };
   }
 
+  /**
+   * 浏览器开发模式下的模拟检索。
+   *
+   * 返回两条一眼就能看出是假来源的条目：这里的目的不是给出真结果，
+   * 而是让「检索结果如何进入回答、来源如何展示」这条链路在浏览器里也能走通。
+   */
+  async webSearch(query: string): Promise<WebSearchOutcome> {
+    return {
+      query,
+      truncated: false,
+      sources: [
+        {
+          url: "https://example.invalid/mock-source-1",
+          title: "模拟来源一（浏览器开发模式）",
+          snippet: "这条来源是内置模拟服务编造的，用于验证来源展示与引用格式。",
+          publishedAt: null,
+        },
+        {
+          url: "https://example.invalid/mock-source-2",
+          title: "模拟来源二（浏览器开发模式）",
+          snippet: "桌面版里这里会换成真实检索返回的标题、摘录与日期。",
+          publishedAt: null,
+        },
+      ],
+    };
+  }
+
+  async testWebSearch(): Promise<TestResult> {
+    return { ok: true, message: "模拟检索始终可用（返回 2 条假来源）", model: "mock", latencyMs: 0 };
+  }
+
   async stream(
     messages: ChatTurn[],
     _config: AiConfig,
@@ -217,20 +359,125 @@ class MockProvider implements AiProvider {
   ): Promise<string> {
     const requestId = `mock-${Date.now()}`;
     const question = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    const reply = buildMockReply(question);
+    const callId = "mock-search-1";
+
+    /*
+     * 模拟服务按**脚本**走一遍真实顺序：先想一轮 → 调用检索 → 拿到来源 → 再想一轮 → 回答。
+     *
+     * 顺序本身就是这条时间线要展示的东西，所以不能在模拟里省掉中间两步：
+     * 浏览器自检（ui-check）就靠它验证「检索条目出现、状态从进行中变成 N 条来源、
+     * 答案里不混推理」。标题与来源都是假的，但结构是真的。
+     */
+    const script: Array<{
+      event:
+        | { kind: "reasoning"; text: string }
+        | { kind: "delta"; text: string }
+        | { kind: "toolCall"; id: string; name: string; query: string; round: number }
+        | {
+            kind: "toolResult";
+            id: string;
+            ok: boolean;
+            sources: WebSearchSource[];
+            truncated: boolean;
+            elapsedMs: number;
+            error: string | null;
+          };
+      /** 这一步之后空转多少个 tick（用来让「检索中…」真的看得见） */
+      hold?: number;
+    }> = [
+      { event: { kind: "reasoning", text: buildMockReasoning(question) } },
+      {
+        event: {
+          kind: "toolCall",
+          id: callId,
+          name: "web_search",
+          query: question.trim() || "这个概念",
+          round: 1,
+        },
+        hold: 8,
+      },
+      {
+        event: {
+          kind: "toolResult",
+          id: callId,
+          ok: true,
+          /*
+           * 刻意给 12 条（多于旧版写死的 8 条上限）：来源条数现在由上游决定，
+           * 界面不再截断，只把清单收进各自可折叠的检索条目里。
+           * 浏览器自检就靠这份数据验证「超过 8 条也照样全列出来」。
+           */
+          sources: Array.from({ length: 12 }, (_, i) => ({
+            url: `https://example.invalid/mock-source-${i + 1}`,
+            title: `模拟来源${i + 1}（浏览器开发模式）`,
+            snippet:
+              i === 0
+                ? "这条来源是内置模拟服务编造的，用于验证来源展示与引用格式。"
+                : `第 ${i + 1} 条假来源；桌面版里会换成真实检索返回的标题、摘录与日期。`,
+            publishedAt: null,
+          })),
+          truncated: false,
+          elapsedMs: 640,
+          error: null,
+        },
+      },
+      { event: { kind: "reasoning", text: buildMockReasoningAfterSearch() } },
+      { event: { kind: "delta", text: buildMockReply(question) } },
+    ];
 
     let index = 0;
+    let cursor = 0;
+    let hold = 0;
+
+    const finish = () => {
+      window.clearInterval(timer);
+      this.timers.delete(requestId);
+      handlers.onDone({ finishReason: "stop", usage: { mock: true }, completed: true });
+    };
+
     const timer = window.setInterval(() => {
-      // 每次推进几个字，模拟流式输出的节奏
-      const step = 3 + Math.floor(Math.random() * 5);
-      const chunk = reply.slice(index, index + step);
-      index += step;
-      if (chunk) handlers.onDelta(chunk);
-      if (index >= reply.length) {
-        window.clearInterval(timer);
-        this.timers.delete(requestId);
-        handlers.onDone({ finishReason: "stop", usage: { mock: true }, completed: true });
+      if (hold > 0) {
+        hold -= 1;
+        return;
       }
+      const item = script[index];
+      if (!item) {
+        finish();
+        return;
+      }
+      const event = item.event;
+
+      if (event.kind === "reasoning" || event.kind === "delta") {
+        const chunk = event.text.slice(cursor, cursor + 6);
+        cursor += 6;
+        if (chunk) (event.kind === "reasoning" ? handlers.onReasoning : handlers.onDelta)?.(chunk);
+        if (cursor >= event.text.length) {
+          index += 1;
+          cursor = 0;
+          hold = item.hold ?? 0;
+        }
+        return;
+      }
+
+      if (event.kind === "toolCall") {
+        handlers.onToolCall?.({
+          id: event.id,
+          name: event.name,
+          query: event.query,
+          round: event.round,
+        });
+      } else {
+        handlers.onToolResult?.({
+          id: event.id,
+          ok: event.ok,
+          sources: event.sources,
+          truncated: event.truncated,
+          elapsedMs: event.elapsedMs,
+          error: event.error,
+        });
+      }
+      index += 1;
+      cursor = 0;
+      hold = item.hold ?? 0;
     }, 45);
 
     this.timers.set(requestId, timer);
@@ -244,6 +491,35 @@ class MockProvider implements AiProvider {
       this.timers.delete(requestId);
     }
   }
+}
+
+/**
+ * 模拟的思考过程。
+ *
+ * 刻意写成「看得出是过程而不是答案」的样子：真实推理内容也是这样——
+ * 有反复、有自我纠正、句子不完整。用它来验证「过程」与「正文」在界面上分得开。
+ */
+function buildMockReasoning(question: string): string {
+  const topic = question.trim() || "这个概念";
+  return [
+    `先想清楚「${topic}」到底在问什么。`,
+    `它有两种可能的意思，需要分开处理。`,
+    `第一种是字面定义，第二种是它在实际场景里的作用。`,
+    `如果只答第一种，使用者大概会觉得没解决他的问题。`,
+    `那就先给定义，再补一个具体场景。`,
+    `等一下，还要确认：这里涉及的前置概念我是不是应该先点出来？`,
+    `对，前置概念不点出来，后面的推导会断层。`,
+    `好，按「定义 → 为什么需要 → 一个例子」来组织。`,
+  ].join("");
+}
+
+/** 检索之后的第二轮思考：时间线上要紧跟检索条目，看得出「材料改变了什么」 */
+function buildMockReasoningAfterSearch(): string {
+  return [
+    `检索回来的材料里有两处说法不完全一致，得先判断哪一处更可信。`,
+    `一处来自官方文档，另一处是二手转述，以后者为准会出错。`,
+    `那就以官方那份为主，并在回答里把来源标出来。`,
+  ].join("");
 }
 
 function buildMockReply(question: string): string {

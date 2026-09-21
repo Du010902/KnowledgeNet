@@ -1327,6 +1327,10 @@ fn convert(
                     usage,
                     // v1 的 chat_messages 没有 model 列
                     model: None,
+                    // v1 也没有思考过程这一列：迁移过来的老对话就是没有
+                    reasoning: None,
+                    // v1 更没有过程记录（思考 + 工具调用）：它连联网检索都没有过
+                    steps: Vec::new(),
                     created_at: paths::iso_from_ms(message.created_at),
                     updated_at: paths::iso_from_ms(message.created_at),
                     extra,

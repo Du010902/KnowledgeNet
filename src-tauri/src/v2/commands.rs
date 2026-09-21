@@ -24,6 +24,7 @@ use crate::device;
 use crate::library::{self, LibraryLock, LockInfo};
 use crate::models::{code, CmdError, CmdResult, CopyMode, CopyResult, LearnStatus};
 use crate::paths;
+use crate::websearch::{self, SearchOutcome};
 
 use super::atomic;
 use super::chats;
@@ -36,7 +37,7 @@ use super::relations;
 use super::resources;
 use super::schema::{
     BookmarkEntry, Evidence, GoalsFile, LibraryManifest, MessageFile, MessageStatus, NodeMeta,
-    RelationEdge, RelationsFile, ResourceEntry, ThreadFile,
+    ProcessStep, RelationEdge, RelationsFile, ResourceEntry, ThreadFile,
 };
 use super::scanner::{ScanIssue, ScanReport, ScannedEdge, ScannedNode, ScannedThread};
 use super::state::{
@@ -177,6 +178,18 @@ pub struct ChatMessageView {
     pub role: String,
     #[serde(default)]
     pub content: String,
+    /// 模型的思考过程。**读兼容字段**：新消息不再写它（见 `save_message`），
+    /// 前端在 `steps` 为空时把它当成一条推理步骤显示，旧对话因此不会突然少了过程。
+    #[serde(default)]
+    pub reasoning: Option<String>,
+    /// 过程记录：思考与工具调用，按发生顺序。
+    ///
+    /// `#[serde(default)]` 不能省：老前端不带这个字段，缺了它 Tauri 会在反序列化时
+    /// 直接报 `missing field steps`——而那是一条只在真机运行时才出现的错误。
+    /// `deserialize_with` 额外兜住显式 `null`（前端类型是 `ProcessStep[] | null`，
+    /// 见 `schema::de_steps_lenient`）：宁可当成「没有过程记录」，也不能让整条回答存不下去。
+    #[serde(default, deserialize_with = "super::schema::de_steps_lenient")]
+    pub steps: Vec<ProcessStep>,
     pub status: String,
     pub finish_reason: Option<String>,
     pub request_id: Option<String>,
@@ -593,6 +606,8 @@ fn message_view(message: &MessageFile) -> ChatMessageView {
         thread_id: message.thread_id.clone(),
         role: message.role.clone(),
         content: message.content.clone(),
+        reasoning: message.reasoning.clone(),
+        steps: message.steps.clone(),
         status: status_to_view(message.status).to_string(),
         finish_reason: message.finish_reason.clone(),
         request_id: message.request_id.clone(),
@@ -2406,6 +2421,13 @@ pub fn save_message(
             sequence: message.sequence.max(0),
             role: message.role.clone(),
             content: message.content.clone(),
+            /*
+             * `reasoning` 是上一版的读兼容字段，**新消息一律不写**：
+             * 思考和检索步骤全部落在 `steps` 里（那里有序、有来源）。
+             * 前端仍然会把它读出来显示旧对话，但写回去的那一份不再需要它。
+             */
+            reasoning: None,
+            steps: message.steps.clone(),
             status: status_from_view(&message.status),
             finish_reason: message.finish_reason.clone(),
             request_id: message.request_id.clone(),
@@ -2668,6 +2690,56 @@ pub fn clear_api_key() -> CmdResult<()> {
 #[tauri::command]
 pub async fn test_ai_connection(config: AiConfig) -> CmdResult<TestResult> {
     Ok(deepseek::test_connection(config).await)
+}
+
+/// 联网检索连通性测试用的极小查询：固定措辞，好让不同时间、不同机器上的
+/// 失败可以互相比较（用户报「检索失败」时，我们至少知道问的是同一句话）。
+const TEST_SEARCH_QUERY: &str = "KnowledgeNet connectivity test";
+
+/// 一次联网检索。返回结构化来源（url/title/snippet/publishedAt）。
+///
+/// 检索端点与检索模型与会话分开（见 `AiConfig::search_base_url`），
+/// API Key 由 `websearch` 自己从系统凭据存储取——命令层不碰密钥，
+/// 也就没有机会把它写进错误信息或日志。
+#[tauri::command]
+pub async fn web_search(app: AppHandle, query: String) -> CmdResult<SearchOutcome> {
+    let settings = device::settings_path(&app)?;
+    let config = device::load_ai_config(&settings)?;
+    websearch::search(&query, &config)
+        .await
+        .map_err(CmdError::msg)
+}
+
+/// 用一次极小的真实检索验证「检索端点 + 检索模型 + 凭据」这条链路。
+///
+/// 为什么不复用 `test_ai_connection`：会话走 `/chat/completions`、检索走
+/// Anthropic 兼容端点，连模型名都是两个字段。会话通了完全不代表检索通，
+/// 而「检索一直失败」最常见的成因就是这里配错，所以必须单独测一次。
+#[tauri::command]
+pub async fn test_web_search(config: AiConfig) -> CmdResult<TestResult> {
+    let model = config.resolved_search_model();
+    let started = paths::now_ms();
+    match websearch::search(TEST_SEARCH_QUERY, &config).await {
+        Ok(outcome) => {
+            let latency = paths::now_ms() - started;
+            Ok(TestResult {
+                ok: true,
+                message: format!(
+                    "检索正常：返回 {} 条来源，用时 {latency} ms",
+                    outcome.sources.len()
+                ),
+                model: Some(model),
+                latency_ms: Some(latency),
+            })
+        }
+        Err(err) => Ok(TestResult {
+            ok: false,
+            // 原样带上可操作的错误：它已经写明用的是哪个端点、去哪里改
+            message: err,
+            model: Some(model),
+            latency_ms: Some(paths::now_ms() - started),
+        }),
+    }
 }
 
 #[tauri::command]

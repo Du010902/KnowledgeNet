@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ChatComposer } from "@/components/ChatComposer";
 import { ChatMessages } from "@/components/ChatMessages";
+import { formatTokens } from "@/data/contextBudget";
 import { Icon } from "@/components/icons";
 import { hasRealAi } from "@/data/aiProvider";
 import { isImeComposing } from "@/keyboard";
@@ -94,6 +95,8 @@ export function ConversationPane() {
   const activeRequests = useChat((s) => s.activeRequests);
   const pendingScroll = useChat((s) => s.pendingScroll);
   const error = useChat((s) => s.error);
+  const activity = useChat((s) => s.activity);
+  const contextUsage = useChat((s) => s.contextUsage);
   const configured = useChat((s) => s.configured);
   const aiLabel = useChat((s) => s.aiLabel);
   const messagesLoading = useChat((s) => s.messagesLoading);
@@ -517,6 +520,7 @@ export function ConversationPane() {
                     onCopyCode={(code) => void copyCode(code)}
                     onRecordQuestion={(m) => void recordQuestion(m)}
                     onRetry={(m) => void chatApi().retry(node.id, m.id)}
+                    activity={activity}
                   />
                 </div>
               </div>
@@ -535,6 +539,12 @@ export function ConversationPane() {
                       writable ? "关于这个知识点，你想知道什么？" : "只读知识库：对话不会保存，无法发送"
                     }
                     textareaRef={inputRef}
+                    activity={activity}
+                    contextLabel={
+                      contextUsage
+                        ? `上下文 ${formatTokens(contextUsage.total)} / ${formatTokens(contextUsage.window)}`
+                        : null
+                    }
                   />
                 </div>
               </div>

@@ -30,6 +30,11 @@ src-tauri/gen/
 design/
 docs/
 audit/
+research/
+/cn/
+/first/
+/media/
+/repro/
 tests/
 fixtures/
 scripts/
@@ -37,6 +42,12 @@ src-tauri/tests/
 src-tauri/examples/
 knowledge-space.html
 probe.lock
+/batch_fetch.mjs
+/fetch_text.mjs
+/raw_launch.html
+/raw_save.mjs
+/JEV_research_brief.md
+/urls*.txt
 
 # 界面自检留下的截图与报告（scripts/ui-check.mjs 的输出）
 .ui-check

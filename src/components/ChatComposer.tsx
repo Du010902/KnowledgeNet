@@ -35,6 +35,8 @@ export function ChatComposer({
   modelLabel,
   placeholder,
   textareaRef,
+  activity,
+  contextLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -47,26 +49,37 @@ export function ChatComposer({
   modelLabel: string;
   placeholder: string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
+  /** 生成过程中的状态：正在联网检索、上游不可用正在重试…… */
+  activity?: string | null;
+  /** 上下文用量提示，形如「上下文 3.2k / 128k」 */
+  contextLabel?: string | null;
 }) {
-  /** 只改「深度思考」一项的动作；走 bridge 是为了不依赖状态层的具体实现 */
+  /** 只改「深度思考」「联网检索」两项的动作；走 bridge 是为了不依赖状态层的具体实现 */
   const saveThinking = chatApi().setThinking;
+  const saveWebSearch = chatApi().setWebSearch;
   /** null = 这项设置读不出来（模拟服务返回默认配置时不会为 null，读失败才会），此时不渲染开关 */
   const [thinking, setThinkingValue] = useState<boolean | null>(null);
+  const [webSearch, setWebSearchValue] = useState<boolean | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
 
   /*
    * 初值从配置里读。`modelLabel` 作为依赖：它变化意味着模型 / 服务地址被改过，
-   * 那条路径上「思考模式」也可能一起被改（例如在设置弹窗里改过），这里要重新对齐。
+   * 那条路径上「思考模式」「联网检索」也可能一起被改（例如在设置弹窗里改过），这里要重新对齐。
+   * 两项一次读回：分两次读会出现「一个已经跟上、另一个还没跟上」的中间态。
    */
   useEffect(() => {
     let alive = true;
     void getAiProvider()
       .loadSettings()
       .then((s) => {
-        if (alive) setThinkingValue(s.config.thinking);
+        if (!alive) return;
+        setThinkingValue(s.config.thinking);
+        setWebSearchValue(s.config.webSearch ?? false);
       })
       .catch(() => {
-        if (alive) setThinkingValue(null);
+        if (!alive) return;
+        setThinkingValue(null);
+        setWebSearchValue(null);
       });
     return () => {
       alive = false;
@@ -103,6 +116,19 @@ export function ChatComposer({
       await saveThinking(next);
     } catch (err) {
       setThinkingValue(!next);
+      setSwitchError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const toggleWebSearch = async () => {
+    if (webSearch === null || switchDisabled) return;
+    const next = !webSearch;
+    setSwitchError(null);
+    setWebSearchValue(next);
+    try {
+      await saveWebSearch(next);
+    } catch (err) {
+      setWebSearchValue(!next);
       setSwitchError(err instanceof Error ? err.message : String(err));
     }
   };
@@ -175,14 +201,54 @@ export function ChatComposer({
           )}
 
           {/*
+            联网检索：与「深度思考」并列，因为同样是「提问前那一刻才决定的事」。
+            默认关闭——开启后检索词会发给 DeepSeek 的服务端搜索，比只发当前知识点多走一步，
+            这个动作必须由使用者自己按下（设置面板里有更完整的说明）。
+          */}
+          {webSearch !== null && (
+            <label
+              className="tool-button thinking-switch"
+              title={
+                switchDisabled
+                  ? "浏览器开发模式用的是内置模拟服务，不保存这项设置；桌面版里可以切换"
+                  : "开启后模型可以自己决定要不要检索网页，过程与来源会显示在回答上方；检索词会发送给 DeepSeek"
+              }
+            >
+              <input
+                type="checkbox"
+                className="switch"
+                role="switch"
+                aria-label="联网检索"
+                checked={webSearch}
+                disabled={switchDisabled}
+                onChange={() => void toggleWebSearch()}
+              />
+              <span>联网</span>
+            </label>
+          )}
+
+          {contextLabel && (
+            <span
+              className="tool-button context-usage"
+              title="按本轮请求估算的上下文占用；历史只保留尾部预算内的部分，更早的内容不会发送"
+            >
+              {contextLabel}
+            </span>
+          )}
+
+          {/*
            * 提示只在真的需要时出现：正在生成时说明「可以随时停」，
            * 其余时候只说一条最容易被忘掉的快捷键。
            *
            * 两段文案是两个元素：窄屏要隐藏常驻的快捷键提示（验收清单 P2-2），
            * 但「生成中，可停止」必须留着——那是唯一说明发送键此刻是停止键的地方。
            */}
+          {/*
+           * 状态提示分两层：生成中优先显示「此刻在做什么」（正在联网检索、上游不可用正在重试），
+           * 没有具体状态时才退回「生成中，可停止」——后者是唯一说明发送键此刻是停止键的地方。
+           */}
           {running ? (
-            <span className="composer-status">生成中，可停止</span>
+            <span className="composer-status">{activity ?? "生成中，可停止"}</span>
           ) : (
             <span className="composer-shortcut">Enter 发送 · Shift + Enter 换行</span>
           )}
@@ -190,7 +256,7 @@ export function ChatComposer({
       </div>
       {switchError && (
         <p className="field-error" role="alert">
-          切换深度思考失败：{switchError}
+          切换设置失败：{switchError}
         </p>
       )}
     </div>
