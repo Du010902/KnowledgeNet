@@ -1,0 +1,514 @@
+/* ============================================================================
+   KnowledgeNet · 应用骨架 · 窗口栏 · 全局栏 · 主视图标签与其附属菜单
+   ----------------------------------------------------------------------------
+   应用骨架 · 窗口栏 · 全局栏 · 主视图标签与其附属菜单
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* --------------------------------- 应用骨架 --------------------------------- */
+
+/*
+ * 外壳只有四行：窗口栏 + 库状态条（有问题时才出现）+ 工作台 + 提示层。
+ * 顶栏与工作区都在工作台内部，因此这里用纵向 flex 而不是固定行高的 grid——
+ * 状态条出现时不该把工作区挤出窗口。
+ */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 520px;
+  background: var(--bg);
+}
+
+/*
+ * 库选择界面在窗口栏之下占满剩余高度。
+ *
+ * `.boot` 本身是 `height: 100%`，作为 `.app`（纵向 flex）的子元素会被
+ * 顶到窗口栏下面去（多出 32px 溢出）；这里把它改成「吃掉剩余空间」。
+ */
+.boot.library-picker {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* 「正在打开知识库…」是压在库选择界面之上的一层，不是它下面的另一屏 */
+.boot-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--canvas) 76%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+/* ------------------------------- 窗口栏 ------------------------------- */
+
+/*
+ * 自绘标题栏（参考图 .window-bar）：桌面版关掉了原生边框，这一条就是窗口的顶边。
+ * 32px、比全局栏更暗一档（--titlebar），底部一条软分隔线。
+ */
+.window-bar {
+  display: flex;
+  align-items: center;
+  height: var(--titlebar-h);
+  flex: none;
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--secondary);
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 拖拽区：`data-tauri-drag-region` 由 Tauri 注入的脚本处理，不依赖任何 JS 模块 */
+.window-drag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  padding-left: 12px;
+}
+
+.window-mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent);
+}
+
+.window-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-controls {
+  display: flex;
+  height: 100%;
+}
+
+.window-control {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  color: var(--secondary);
+}
+
+.window-control:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.window-control.close:hover:not(:disabled) {
+  background: #c42b35;
+  color: #ffffff;
+}
+
+.window-control .icon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.6;
+}
+
+/* 工作台：全局栏 + 工作区 */
+.shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * 工作区只占一列。
+ *
+ * 原来这里还有一条 46px 的活动栏，只放一个「搜索」——一条几乎空置的纵栏换来
+ * 46px 的常驻浪费。搜索已经移进全局栏，工作区因此整宽。
+ */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 当前工作区：对话独占 / 分屏 / 图谱独占都发生在这里 */
+.workspace-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* --------------------------------- 全局栏 --------------------------------- */
+
+/*
+ * 三段式：左边「品牌 / 知识库」，中间主视图标签，右边「搜索 / 状态 / 设置」。
+ * 内容宽度用 minmax(260px,1fr) / auto / minmax(360px,1fr) 约束，
+ * 中间那一段因此始终居中——主视图是这一栏的主角，不该被两侧挤来挤去。
+ */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(360px, 1fr);
+  align-items: center;
+  gap: 18px;
+  height: var(--appbar-h);
+  flex: none;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--appbar);
+  z-index: 20;
+}
+
+.brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 品牌与知识库之间的 `/`：参考图用它把「产品」和「当前打开的是什么」分开 */
+.crumb-separator {
+  flex: none;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.25px;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.brand-mark .icon {
+  width: 21px;
+  height: 21px;
+}.library-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 210px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--secondary);
+  font-size: 14px;
+}.library-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}.library-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-button .chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--muted);
+}
+
+/* 旧的面包屑（`.breadcrumbs`）已由「品牌 / 知识库」之间的分隔符取代：
+   类名在源码里不再出现，规则一并删除（验收清单 P2-7）。 */
+
+/* 右侧动作区 */
+.top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}.top-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 保存状态点用强调色（参考图 .save-state i）：它表达「一切正常」，不是「已完成」 */
+.top-save .status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.top-save[data-state="saving"] .status-dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-soft);
+}
+
+.top-save[data-state="error"] .status-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+/* --------------------------- 全局栏：搜索入口 --------------------------- */
+
+/*
+ * 搜索从「一整条活动栏」变成全局栏里的一个紧凑入口。
+ * 这个按钮是唯一的常驻搜索入口（`data-nav-kind="search"` 保持不变，抽屉与
+ * Ctrl/Cmd + K 的行为一个字都没改），点它打开的仍然是同一个搜索抽屉。
+ */
+.search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(250px, 25vw);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas-soft);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+}
+
+.search-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  color: var(--secondary);
+}
+
+.search-trigger .search-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font: 11px/1.2 var(--font);
+}
+
+/* ------------------------- 全局栏：主视图标签 ------------------------- */
+
+/*
+ * 主视图是**标签**，不是三个模式按钮：底部指示线表达「现在在哪一档」。
+ * 「分屏」不再是第三个标签——它是标签附属菜单里的一个动作
+ * （`.tab-menu-button`，与 `design/workbench-ui-reference.html` 同构），
+ * 能力（拖拽比例 / 最大化 / Esc 恢复 / 窄屏降级 / 按库持久化）原样保留。
+ */
+.view-tabs {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 0;
+}
+
+.mode-switcher {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 20px;
+}
+
+.mode-switcher button,
+.view-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mode-switcher button .icon,
+.view-tab .icon {
+  width: 17px;
+  height: 17px;
+}
+
+.mode-switcher button::after,
+.view-tab::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+}
+
+.mode-switcher button:hover:not(:disabled),
+.view-tab:hover {
+  color: var(--text);
+}
+
+.mode-switcher button.active,
+.view-tab[aria-selected="true"] {
+  color: var(--text);
+}
+
+.mode-switcher button.active::after,
+.view-tab[aria-selected="true"]::after {
+  background: var(--accent);
+}
+
+.mode-switcher button:disabled {
+  opacity: 0.4;
+}
+
+/* ------------------- 标签附属菜单（视图打开方式） ------------------- */
+
+/* 贴着当前标签右侧的小箭头：它属于标签，不是第三个主视图 */
+.view-tab-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: none;
+  margin-left: -3px;
+}
+
+.tab-menu-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tab-menu-button:hover,
+.tab-menu-button[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tab-menu-button .icon {
+  width: 12px;
+  height: 12px;
+  /* 用「下一级」的箭头表达「这里还有一层」，而不是再来一颗分栏图标 */
+  transform: rotate(90deg);
+}
+
+.tab-menu {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: 190px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+
+.tab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--secondary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.tab-menu button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tab-menu button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tab-menu button .icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.tab-menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* 右对齐的浮层：工具栏最右那颗「视图设置」用它 */
+.tab-menu.align-right {
+  right: 0;
+  left: auto;
+}
+
+/* 菜单里的小标题与勾选标记（名称密度那一组用） */
+.menu-label {
+  padding: 6px 9px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tab-menu button .menu-mark {
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+}
+
+.tab-menu button[aria-checked="false"] .menu-mark {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* 视图设置菜单的锚点 */
+.toolbar-menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* 新建知识点与视图控制之间留出分组间距（8–12px） */
+.graph-actions .graph-new-node {
+  margin-left: 10px;
+}
+

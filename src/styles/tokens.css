@@ -1,0 +1,492 @@
+/* ============================================================================
+   KnowledgeNet · 设计令牌 · 全局元素 · 通用控件
+   ----------------------------------------------------------------------------
+   设计令牌 · 全局元素 · 通用控件
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* ============================================================================
+   KnowledgeNet · 设计令牌与骨架
+   ----------------------------------------------------------------------------
+   布局：全局栏（品牌 / 知识库 / 主视图 / 搜索 / 状态 / 设置）+ 弹性工作区
+        （对话独占 / 可拖拽分屏 / 图谱独占）+ 上下文栏（当前知识点那一行）。
+   覆盖层：导航抽屉、节点检查器、命令面板都浮在内容之上，不改变分屏比例。
+   主题：只由 <html data-theme="light|dark"> 决定，组件不判断主题、不内联颜色。
+   字体：正文与输入 16px、常用控件 14px、次要元数据 12–13px（不再用 9–10px 当正文）。
+
+   令牌命名沿用 v2 工作台的既有名字（`--bg/--surface/--border/--accent/...`），
+   这样 3000 多行既有规则不必跟着改名；新增的名字来自《工作台 UI 审查与重构规范》
+   与 `design/workbench-ui-reference.html`（`--surface-raised`、`--line-soft`、`--accent-strong` 等）。
+   ========================================================================== */
+
+:root {
+  /* 表面：中性色承担大部分面积，层次靠亮度差而不是靠边框 */
+  --bg: #f5f8f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --sidebar: #eef3f1;
+  --canvas: #f5f8f7;
+  --canvas-soft: #eef3f1;
+  --appbar: #f9fbfa;
+  --titlebar: #f2f6f5;
+
+  /* 文字 */
+  --text: #192523;
+  --secondary: #526663;
+  --muted: #778a87;
+
+  /* 分隔：`--line` 用于可交互容器的边界，`--line-soft` 用于纯分组线 */
+  --border: #d6e0dd;
+  --line: #d6e0dd;
+  --line-soft: #e5ecea;
+  --hover: #e8f0ed;
+  --edge: #c9d6d3;
+  --dot: #dbe4e1;
+  /*
+   * 空间视图专用的三个值，取自 `design/workbench-ui-reference.html` 的 `spaceGraph`：
+   * 普通连线是 #849995/#5d7479（比 `--edge` 更「青」一档），星尘 #274f48，
+   * 中心辉光的两个 stop 见 `--graph-glow-*`。它们只在三维画布上生效，
+   * 因此不能复用 `--edge`（那个还管滚动条与分隔线）。
+   *
+   * 浅色下连线与星尘都压了一档（#6e827e / .18）：参考值在 #f5f8f7 上合成后
+   * 只有三十来级的明度差，投到实际屏幕上偏「看不见」（验收清单 P2-4）。
+   * 加深仅限浅色，深色仍用参考字面值。
+   */
+  --edge-graph: #6e827e;
+  --dust: #274f48;
+  --graph-glow-1: rgba(22, 127, 104, 0.075);
+  --graph-glow-2: rgba(22, 127, 104, 0.025);
+
+  /* 强调色：低饱和松石绿。当前项、聚焦、发送、选中关系用同一个色 */
+  --accent: #167f68;
+  --accent-hover: #0c6f59;
+  --accent-strong: #0c6f59;
+  --accent-soft: rgba(22, 127, 104, 0.11);
+  --accent-faint: rgba(22, 127, 104, 0.055);
+  --accent-text: #146b58;
+  --on-accent: #ffffff;
+
+  /* 学习状态与提示：只表达状态，不作装饰 */
+  --success: #2f8a70;
+  --warning: #a8762c;
+  --warning-soft: #fbf3e5;
+  --danger: #c63e48;
+  --danger-soft: #fdeced;
+  --todo: #74878d;
+
+  /* 层次 */
+  --shadow: 0 18px 55px rgba(29, 55, 50, 0.16);
+  --shadow-soft: 0 5px 24px rgba(29, 55, 50, 0.1);
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+  --modal-shadow: 0 24px 80px rgba(16, 27, 40, 0.19);
+  --scrim: rgba(5, 10, 12, 0.42);
+
+  /* 形状与间距：小控件 8px、输入与浮层 12–14px、大弹窗 16px */
+  --radius: 12px;
+  --radius-btn: 8px;
+  --radius-node: 12px;
+  --radius-dialog: 16px;
+  /* 对话正文的最大阅读宽度：超过这个宽度眼睛会找不到下一行的开头 */
+  --reading-width: 820px;
+  /* 上下文侧栏与输入区 */
+  --side-width: 320px;
+  --composer-max: 132px;
+  /* 全局栏高度 / 窗口栏高度 / 上下文栏高度：覆盖层与画布浮层以它们为基准。
+     `--shell-top` 由 WorkspaceShell 运行时量出（库状态条出现时顶栏会下移），
+     这样「浮层从哪里开始」只有一处定义，不会与顶栏的实际高度脱节。 */
+  --titlebar-h: 32px;
+  --appbar-h: 56px;
+  --context-h: 48px;
+  /* 活动栏已经去掉（搜索移进全局栏）：这两个名字保留为 0，覆盖层不必逐个改。 */
+  --rail-w: 0px;
+  --shell-top: 56px;
+  --font:
+    Inter, "Segoe UI Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  color-scheme: light;
+  font-family: var(--font);
+  font-size: 15px;
+}
+
+[data-theme="dark"] {
+  --bg: #11181c;
+  --surface: #182227;
+  --surface-raised: #1d292f;
+  --sidebar: #141d21;
+  --canvas: #11181c;
+  --canvas-soft: #151e22;
+  --appbar: #141d21;
+  --titlebar: #10171a;
+
+  --text: #edf4f2;
+  --secondary: #a9b8b6;
+  --muted: #768987;
+
+  --border: #2a3a42;
+  --line: #2a3a42;
+  --line-soft: #213037;
+  --hover: #223138;
+  --edge: #34464e;
+  --dot: #22303a;
+  /* 空间视图专用（见浅色那一段的说明） */
+  --edge-graph: #5d7479;
+  --dust: #81aca6;
+  --graph-glow-1: rgba(66, 177, 148, 0.085);
+  --graph-glow-2: rgba(44, 105, 102, 0.025);
+
+  --accent: #79d8bd;
+  --accent-hover: #8ae6ca;
+  --accent-strong: #8ae6ca;
+  --accent-soft: rgba(121, 216, 189, 0.12);
+  --accent-faint: rgba(121, 216, 189, 0.06);
+  --accent-text: #8ad9c1;
+  --on-accent: #0c2420;
+
+  --success: #56bd9d;
+  --warning: #ddb064;
+  --warning-soft: #3c3427;
+  --danger: #ff777b;
+  --danger-soft: #402c2f;
+  --todo: #74878d;
+
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 5px 24px rgba(0, 0, 0, 0.18);
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+  --modal-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(5, 10, 12, 0.56);
+
+  color-scheme: dark;
+}
+
+/* --------------------------------- 基础 --------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}/*
+ * 主操作禁用时不要留着强调色的底：一块半透明的松石绿看起来仍然"可按"，
+ * 而它其实按不动。退回中性表面 + 淡边框，谁都能一眼看出当前不可用。
+ */
+.btn.primary:disabled {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--muted);
+  opacity: 1;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.8;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.secondary-text {
+  color: var(--secondary);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --------------------------------- 控件 --------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
+}.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--secondary);
+}.btn.ghost:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}.btn.danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: var(--secondary);
+  transition: background 0.18s, color 0.18s;
+}
+
+.icon-btn:hover:not(:disabled),
+.icon-btn[aria-pressed="true"],
+.icon-btn.active {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-btn.sm {
+  width: 26px;
+  height: 26px;
+}
+
+.icon-btn.sm .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--hover);
+  color: var(--secondary);
+  white-space: nowrap;
+}
+
+.pill.is-learning {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.pill.is-done {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot.is-learning {
+  background: var(--warning);
+}
+
+.status-dot.is-done {
+  background: var(--success);
+}
+
+/* 状态点也用于较大的位置（画布节点），单独给一档尺寸 */
+.status-dot.md {
+  width: 8px;
+  height: 8px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/*
+ * 掌握进度（参考图 .progress-row / .progress-track / .progress-fill）。
+ *
+ * 「3 / 7 个前置知识」+ 5px 细轨道：进度是**读数**，不是装饰，
+ * 因此满高只有 5px、底色用最轻的分组线。
+ */
+.progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.progress-track {
+  height: 5px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line-soft);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+

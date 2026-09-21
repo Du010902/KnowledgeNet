@@ -1,0 +1,52 @@
+[package]
+name = "knowledgenet"
+version = "0.1.0"
+description = "本地优先的学习依赖图工具"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "knowledgenet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# bundled: 直接编译进 SQLite 源码，不依赖目标机器上已安装的 sqlite3
+rusqlite = { version = "0.38", features = ["bundled", "backup"] }
+
+# AI 对话：网络请求与流式解析
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+# API Key 存进系统凭据存储（Windows 凭据管理器），不进数据库与备份
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service"] }
+# 便携知识库的实体 ID 统一使用 UUIDv7：跨库/跨机不冲突、创建时间大致有序、只含安全字符
+uuid = { version = "1", features = ["v4", "v7"] }
+sha2 = "0.10"
+hex = "0.4.3"
+mime_guess = "2.0.5"
+walkdir = "2.5.0"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+tauri-plugin-dialog = "2.7.3"
+# 安全替换文件的临时文件：Windows 上 persist 走 MoveFileExW + REPLACE_EXISTING，
+# 而 std 的 rename 在 Windows 上不会覆盖已有文件
+tempfile = "3"
+notify = "8"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

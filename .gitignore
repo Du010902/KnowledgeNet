@@ -1,0 +1,53 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Rust / Tauri build output (release installers are published as GitHub assets)
+src-tauri/target/
+src-tauri/gen/
+*.exe
+*.msi
+*.pdb
+
+# Internal design, audit and verification material
+design/
+docs/
+audit/
+tests/
+fixtures/
+scripts/
+src-tauri/tests/
+src-tauri/examples/
+knowledge-space.html
+probe.lock
+
+# 界面自检留下的截图与报告（scripts/ui-check.mjs 的输出）
+.ui-check
+
+# Editor directories and files
+.vscode/
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

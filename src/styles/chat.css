@@ -1,0 +1,1334 @@
+
+
+/* 关闭按钮只在浮层形态（≤740px）出现，桌面端右栏一直可见，不需要关闭 */
+.icon-btn.close-inspector {
+  display: none;
+}
+
+/* ------------------------------- 对话工作区 ------------------------------- */
+
+/*
+ * 对话从「右栏的一个标签」升级成主工作区（`ConversationPane`）：
+ * 节点上下文条 + 阅读区 + 固定输入区，骨架在 window-shell/panels 里，
+ * 这里只写阅读区与线程行的排版细节。
+ *
+ * 旧的 `.chat-pane` 规则已删除：那个类名在源码里不再出现（验收清单 P2-7）。
+ */
+
+/* 消息列表本身不再滚动：滚动交给 .conversation-reader，输入区才能固定 */
+.conversation-reader .messages {
+  flex: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.conversation-composer .composer-wrap {
+  margin: 0;
+}
+
+/*
+ * 线程行：下拉与左侧列表共用。
+ * `min-width: 0` 是关键——没有它，长标题会把删除按钮挤出可视区，
+ * 那正是旧的窄标签栏会横向溢出的原因。
+ */
+.thread-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-del {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  border-radius: 5px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.thread-row:hover .thread-del,
+.thread-row.active .thread-del {
+  opacity: 1;
+}
+
+.thread-row:focus-within .thread-del {
+  opacity: 1;
+}
+
+.thread-del:hover {
+  color: var(--danger);
+}
+
+.thread-del .icon {
+  width: 11px;
+  height: 11px;
+}
+
+.thread-rename {
+  width: 100%;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--surface);
+}
+/* ------------------------------ 状态横幅 ------------------------------ */
+
+.chat-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: none;
+  padding: 10px 19px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.chat-banner .icon {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+.chat-banner.info {
+  background: var(--accent-soft);
+  border-bottom-color: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.chat-banner.warn {
+  background: var(--warning-soft);
+  border-bottom-color: var(--warning-soft);
+  color: var(--warning);
+}
+
+.chat-banner .btn {
+  min-height: 26px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* -------------------------------- 消息 -------------------------------- */
+
+/*
+ * 消息是这一屏的主角：正文 16px / 行高 1.78（规范 §2.6）。
+ * 之前正文只有 13px、元数据 9–10px，在桌面 WebView 里显得稀碎，
+ * 于是又靠更多分隔线去补偿层级——越补越吵。
+ */
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+.message {
+  margin-bottom: 28px;
+  font-size: 16px;
+  line-height: 1.78;
+  overflow-wrap: anywhere;
+}
+
+.message.user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.user-bubble {
+  max-width: 90%;
+  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  white-space: pre-wrap;
+}
+
+.ai-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ai-label .ai-symbol {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ai-label .ai-symbol .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.ai-label .ai-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 回答的最后一段不必再留间距：下面紧跟的是状态行与操作按钮 */
+.ai-body > :last-child {
+  margin-bottom: 0;
+}
+
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 20px;
+}
+
+.message-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.message-actions button:hover {
+  background: var(--hover);
+  color: var(--secondary);
+}
+
+.message-actions .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.message-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* 未正常结束：内容不完整，但不是失败，用警示色而不是错误色 */
+.message-status.warn {
+  color: var(--warning);
+}
+
+.message-status.error {
+  color: var(--danger);
+}
+
+.message-status button {
+  flex-shrink: 0;
+  color: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.typing-caret {
+  display: inline-block;
+  width: 5px;
+  height: 13px;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------- 空态 ------------------------------- */
+
+.chat-empty {
+  max-width: 260px;
+  margin: auto;
+  padding: 35px 18px;
+  text-align: center;
+  color: var(--secondary);
+}
+
+.empty-mark {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  margin: 0 auto 17px;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chat-empty h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.chat-empty p {
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.prompt-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.prompt-chips button {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--secondary);
+  text-align: left;
+}
+
+.prompt-chips button:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* -------------------------------- 输入区 -------------------------------- */
+
+/*
+ * 紧凑输入框（规范 §3 第 4 条）：默认一行视觉高度，内容变高时自动长高，
+ * 到 132px 之后内部滚动。之前 textarea 的最小高度是 75px，加上工具行与提示行，
+ * 首屏还没看到正文就先被吃掉 180px 左右。
+ *
+ * 上边框与底色只由外层的 `.conversation-composer` 负责：这里再声明一次，
+ * 会在输入框上方多出一条更窄的第二条发丝线（参考图只有一层）。
+ */
+.composer-wrap {
+  flex: none;
+}
+
+.composer {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  /* 参考图是 `0 5px 24px rgba(0,0,0,.10)`：深浅主题同一档，深色下不发灰 */
+  box-shadow: 0 5px 24px rgba(0, 0, 0, 0.1);
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 文本与发送键同一行，内边距就是参考图的 `7px 7px 7px 13px` */
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 7px 7px 7px 13px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: var(--composer-max, 132px);
+  padding: 9px 0 7px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+}
+
+.composer textarea:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+/* 工具行：模型 / 深度思考 / 快捷键，三者同一行（参考图 .composer-tools） */
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 9px 7px;
+  color: var(--muted);
+}
+
+/* 工具行里的小按钮：低频、轻量，按下态只换底色 */
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tool-button:hover,
+.tool-button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--secondary);
+}
+
+.model-label {
+  min-width: 0;
+  /* 模型名可以被压缩，但必须留下可读的一截，并且省略号看得见 */
+  max-width: min(220px, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-label .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.composer-shortcut {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 生成中的状态比快捷键重要：它占同样的位置，但用强调色并且永远不隐藏 */
+.composer-status {
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/*
+ * 深度思考开关：与模型名同一行、同一档视觉（参考图的 .tool-button）。
+ * 标签整行可点（原生 label → checkbox），不需要精确点中那个小滑块。
+ */
+.thinking-switch {
+  flex: none;
+  /* 与左边的模型名拉开一点：那是「这是谁在回答」，这是「这次怎么回答」，两件事 */
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.thinking-switch:has(.switch:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.thinking-switch input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.thinking-switch .switch {
+  width: 30px;
+  height: 17px;
+}
+
+.thinking-switch .switch::before {
+  top: 3px;
+  left: 3px;
+  width: 11px;
+  height: 11px;
+}
+
+.thinking-switch .switch:checked::before {
+  transform: translateX(13px);
+}
+
+/* 开启时给标签上强调色：这一格是「这次提问会更慢但更严谨」的唯一提示 */
+.thinking-switch:has(.switch:checked) {
+  color: var(--accent-text);
+}
+
+.send-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--accent);
+  /* 参考图的发送键两套主题都写死深色字：强调底上的白字对比度不够 */
+  color: #0c2420;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/*
+ * 禁用时保留强调底、只降到 38% 不透明度（参考图 `.send-button:disabled`）：
+ * 换成灰底会让这个位置看起来像「另一个按钮」，而不是「同一个按钮现在按不动」。
+ */
+.send-btn:disabled {
+  opacity: 0.38;
+  transform: none;
+}
+
+.send-btn .icon {
+  width: 17px;
+  height: 17px;
+}
+
+/* --------------------------------- 详情 --------------------------------- */
+
+.block {
+  margin-bottom: 25px;
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.block-head h3 {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 计数比标题小一档，避免和标题抢注意力 */
+.block-head .small {
+  font-size: 12px;
+}
+
+.block-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--accent-text);
+}
+
+.block-head button .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.relation {
+  margin-bottom: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.relation-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.relation-name > .icon {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+
+.relation-name .small {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.node-link {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+}
+
+.node-link:hover {
+  color: var(--accent-text);
+}
+
+.relation-name .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.relation-name .icon-btn .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.relation-reason {
+  width: 100%;
+  margin-top: 2px;
+  padding: 4px 0 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.relation-reason:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.empty-text {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+.source-card {
+  margin-bottom: 9px;
+  padding: 12px 13px;
+  border-radius: 9px;
+  background: var(--sidebar);
+}
+
+.source-card blockquote {
+  margin: 0 0 9px;
+  padding-left: 9px;
+  border-left: 2px solid var(--edge);
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--secondary);
+}
+
+.source-card .row {
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.source-card p {
+  margin-top: 7px;
+}
+
+.source-card button {
+  font-size: 12px;
+  color: var(--accent-text);
+}
+
+.source-card button:disabled {
+  color: var(--muted);
+}
+
+.section-action {
+  width: 100%;
+  margin-top: 7px;
+}
+
+.detail-danger {
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.detail-danger button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+.detail-danger button:hover {
+  color: var(--accent-text);
+}
+
+.detail-danger button .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.detail-danger p {
+  margin-top: 7px;
+  line-height: 1.8;
+}
+
+/* --------------------------------- 笔记 --------------------------------- */
+
+.note-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.note-toolbar h3 {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.note-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+.note-toolbar button:hover {
+  color: var(--accent-text);
+}
+
+.note-toolbar .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.note-editor {
+  min-height: 270px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--canvas);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+/* CodeMirror 的背景与文字颜色由变量给出（见 NodeNotes 的主题扩展） */
+.note-editor .cm-editor {
+  background: transparent;
+  font-family: var(--font);
+  font-size: 12px;
+}
+
+.note-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.note-editor .cm-scroller {
+  font-family: var(--font);
+  line-height: 1.9;
+}
+
+.note-editor .cm-content {
+  padding: 0;
+}
+
+.note-preview {
+  min-height: 270px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--canvas);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 保存失败必须显眼：这时候写的内容还没进库 */
+.note-meta .note-save-error {
+  color: var(--danger);
+}
+
+.alias-block {
+  margin-top: 26px;
+}
+
+.alias-block label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.alias-block input {
+  font-size: 12px;
+}
+
+.alias-block p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+/* ---------------------------- 选中文字浮动菜单 ---------------------------- */
+
+.selection-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--modal-shadow);
+  transform: translate(-50%, -100%);
+}
+
+/* 选区离窗口顶边太近时，菜单改放到选区下方 */
+.selection-menu.below {
+  transform: translate(-50%, 0);
+}
+
+.selection-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+}
+
+.selection-action:hover {
+  background: var(--hover);
+}
+
+.selection-action.primary {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.selection-action.primary:hover {
+  background: var(--accent-soft);
+}
+
+.selection-action-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.selection-action .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* 副标题写选中的文字：让「要拿哪段话建点」在按下去之前就看得见 */
+.selection-action-sub {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-action.primary .selection-action-sub {
+  color: var(--accent-text);
+}
+
+/* -------------------------------- 弹窗补充 -------------------------------- */
+
+.settings-provider {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 23px;
+  padding: 13px;
+  border-radius: 10px;
+  background: var(--sidebar);
+}
+
+/* 中间的说明文字要能被压缩：否则「学习助手 · 只围绕当前知识点回答」会把整行撑宽 */
+.settings-provider > div {
+  min-width: 0;
+}
+
+.provider-logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.provider-logo .icon {
+  width: 17px;
+  height: 17px;
+}
+
+.settings-provider strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-provider p {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings-provider .pill {
+  margin-left: auto;
+}
+
+.secret-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secret-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.secret-row .btn {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+/* 删除确认里的三条后果：用警示图标逐条列出来，不写成一段话 */
+.list .list-item .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--warning);
+}
+
+.list .list-item .row {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* ------------------------- Markdown 排版（对话与笔记共用） ------------------------- */
+
+.markdown-body {
+  overflow-wrap: anywhere;
+}
+
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 16px 0 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body p {
+  /* 参考图的正文节奏：段间距 15px、行高 1.78（行高在 .message 上） */
+  margin: 0 0 15px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 18px;
+  padding-left: 1.25em;
+}
+
+.markdown-body li {
+  margin: 8px 0;
+  padding-left: 4px;
+}
+
+.markdown-body strong {
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+
+.markdown-body code {
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--sidebar);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.markdown-body pre {
+  margin: 8px 0 13px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: var(--canvas);
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.markdown-body a {
+  color: var(--accent-text);
+  overflow-wrap: anywhere;
+}
+
+.markdown-body blockquote {
+  margin: 0 0 9px;
+  padding-left: 9px;
+  border-left: 2px solid var(--edge);
+  color: var(--secondary);
+}
+
+/* -------------------------------- 响应式 -------------------------------- */
+
+@media (max-width: 1240px) {
+  .messages,
+  .chat-banner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/*
+ * ≤740px：节点工作区是浮层，这时才需要显式的关闭入口；
+ * 输入框这一行也要收紧（验收清单 P2-2）：
+ * 常驻的快捷键提示直接不显示，模型名只留一截，
+ * 「深度思考」这类文字标签退成图标级宽度——挤在一行里互相截断比少一句提示更糟。
+ */
+@media (max-width: 740px) {
+  .icon-btn.close-inspector {
+    display: inline-flex;
+  }
+
+  .composer-tools {
+    gap: 2px;
+    padding: 0 6px 6px;
+  }
+
+  .composer-shortcut {
+    display: none;
+  }
+
+  .model-label {
+    max-width: 34vw;
+  }
+}
+
+/* ==========================================================================
+   资料面板（右栏「资料」标签）
+   --------------------------------------------------------------------------
+   文件资源是复制进知识库的，所以这里既有「打开」也有「显示位置」；
+   删除一律先说清是「移到回收站」，永久删除在知识库弹窗里单独确认。
+   ========================================================================== */
+
+.resources-pane .block-head .head-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.resources-pane .block-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.resource {
+  margin-bottom: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.resource-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.resource-main > .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.resource-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.resource-name:hover {
+  color: var(--accent-text);
+}
+
+.resource-meta {
+  flex: none;
+  max-width: 42%;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--secondary);
+}
+
+.resource-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ---------------------- Markdown：代码块 / 表格 / 公式 ---------------------- */
+
+/*
+ * 代码块外面多了一层 `.code-block`（语言标注 + 复制按钮），
+ * 所以背景与圆角从 `pre` 提到外层，`pre` 只剩滚动与内边距。
+ */
+.markdown-body .code-block {
+  margin: 8px 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+.markdown-body .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+}
+
+.markdown-body .code-lang {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--secondary);
+}
+
+.markdown-body .code-copy {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 2px 8px;
+  background: none;
+  color: var(--secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.markdown-body .code-copy:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.markdown-body .code-block pre {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 0;
+  background: none;
+}
+
+/* 表格：宽了就在自己的框里横向滚动，不把整段对话撑破 */
+.markdown-body .table-wrap {
+  margin: 8px 0 13px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body th {
+  background: var(--sidebar);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-body hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.markdown-body del {
+  color: var(--secondary);
+}
+
+/* 任务列表：不用真的 input，免得在只读预览里也能被点 */
+.markdown-body li.task {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-left: -14px;
+}
+
+.markdown-body .task-box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 3px;
+  position: relative;
+}
+
+.markdown-body .task-box.done::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 3px;
+  height: 7px;
+  border: solid var(--accent-text);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/*
+ * 公式：排版交给 KaTeX（它的样式表在 main.tsx 里全局引入），这里只做
+ * 「放进对话流里」需要的那点适配——块级居中、可横向滚动、别撑破阅读宽度。
+ */
+.markdown-body .math-block {
+  margin: 10px 0 13px;
+  padding: 4px 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.markdown-body .math-inline .katex {
+  font-size: 1.04em;
+}
+
+/* KaTeX 排不出来时退回的源码样式（宁可显示原文，也不要一片空白） */
+.markdown-body .math-tex {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-style: normal;
+  color: var(--secondary);
+}
+
+/* ---------------------- 对话行的右键菜单（重命名 / 删除） ---------------------- */
+
+/*
+ * 位置用 `position: fixed` + 指针坐标：对话行可能在一个可滚动的列表里，
+ * 用绝对定位就得把坐标换算进容器的滚动偏移，多一层容易算错的地方。
+ */
+.thread-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel, var(--canvas));
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.thread-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thread-menu button:hover {
+  background: var(--sidebar);
+}
+
+.thread-menu button.danger {
+  color: var(--danger, #c0392b);
+}
+
+.thread-menu button svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}

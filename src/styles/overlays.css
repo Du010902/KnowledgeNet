@@ -1,0 +1,559 @@
+/* ============================================================================
+   KnowledgeNet · 节点工作区 · 菜单 · 提示条 · 弹窗 · 启动态
+   ----------------------------------------------------------------------------
+   节点工作区 · 菜单 · 提示条 · 弹窗 · 启动态
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* ------------------------------ 右：节点工作区 ------------------------------ */
+
+.inspector {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.inspector-overline {
+  margin-bottom: 9px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 23px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.dock-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.dock-tab:hover {
+  color: var(--text);
+}
+
+.dock-tab.active {
+  color: var(--text);
+}
+
+.dock-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.dock-tab .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.dock-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detail-pane,
+.notes-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 23px;
+}
+
+/* --------------------------------- 菜单 --------------------------------- */
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+}
+
+.menu {
+  position: fixed;
+  z-index: 36;
+  width: 190px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--modal-shadow);
+}
+
+/* 节点菜单里的分组小标题（编辑 / 关系）：危险项固定在最底部 */
+.menu-group {
+  padding: 6px 10px 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.menu button.danger {
+  color: var(--danger);
+}
+
+.menu button .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.menu hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px;
+}
+
+/* ------------------------------- 提示条 ------------------------------- */
+
+.toast-layer {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 30px);
+  pointer-events: none;
+}
+
+/* 一条提示：参考图 .toast（bottom 22 / padding 10×14 / radius 9 / surface-raised / --shadow） */
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.6;
+  pointer-events: auto;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast .icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--accent);
+}
+
+.toast.warn .icon {
+  color: var(--warning);
+}
+
+.toast.error .icon {
+  color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --------------------------------- 弹窗 --------------------------------- */
+
+/*
+ * 弹窗是**一列 flex**：标题栏固定、内容区自己滚、底栏固定。
+ *
+ * 原来这里是「整个 dialog 滚 + 头尾 sticky」，有两个真实的毛病：
+ * 1. dialog 上的滚动条画在圆角盒子的内边距里，会**戳出圆角**（截图里那条横向
+ *    滚动条就横在底部圆角上，看着像没对齐）；
+ * 2. `overflow: auto` 两个轴都滚：内容一旦比内容盒宽一个像素，底部就多出一条
+ *    横向滚动条，压在最后一行文字上。
+ * 现在把滚动交给 `.dialog-body`：`overflow: hidden` 让圆角真正裁住内容，
+ * 横向一律不出滚动条（`overflow-x: hidden`），纵向滚动条只在内容区里，
+ * 离圆角还有一段距离。
+ */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 50px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-dialog);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--modal-shadow);
+  overflow: hidden;
+  animation: dialog-in 0.18s ease-out;
+}
+
+.dialog[data-width="wide"] {
+  width: min(640px, calc(100% - 32px));
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(5px);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+  padding: 23px 25px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.dialog-head-text {
+  min-width: 0;
+}
+
+.dialog-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+
+.dialog-head p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dialog-body {
+  flex: 1;
+  min-height: 0;
+  /* 只有这一层滚动：横向永不出现滚动条，纵向滚动条留在内容区里 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 不论有没有滚动条都留出那条走道：内容宽度不会随内容长短跳一下 */
+  scrollbar-gutter: stable;
+  /* 右侧少 5px，交给滚动条的走道，视觉上仍是 25px */
+  padding: 23px 20px 24px 25px;
+}
+
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  padding: 15px 25px 20px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.field {
+  margin-bottom: 18px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field > label,
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.field > p {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.field input,
+.field select,
+.field textarea {
+  font-size: 12px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/*
+ * 两列字段：`minmax(0, 1fr)` 而不是 `1fr`。
+ *
+ * `1fr` 的最小值是 `auto`（= min-content），列里的数字输入框、
+ * 长标签一旦比半栏还宽，整列就会被撑出去——弹窗底部随即多一条横向滚动条。
+ * 0 作为下界，列永远乖乖待在自己的半栏里，内容自己换行或省略。
+ */
+.field-row.grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.field-row.grid-2 > * {
+  min-width: 0;
+}
+
+.field-error {
+  margin-top: 9px;
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.7;
+}
+
+.inline-feedback {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--accent-text);
+  overflow-wrap: anywhere;
+}
+
+.privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 13px;
+  border-radius: 8px;
+  background: var(--sidebar);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--secondary);
+}
+
+/* 长段落要能在自己那一行里换行，不能把弹窗撑宽 */
+.privacy-note > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.privacy-note .icon {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+/* 分段选择：一行按钮里只有一个当前项（观察方式、状态选择共用） */
+.segmented {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--sidebar);
+}
+
+.segmented button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 3px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+.segmented button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* 开关 */
+.switch {
+  appearance: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: var(--edge);
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.18s;
+}
+
+.switch:checked {
+  background: var(--accent);
+}
+
+.switch:checked::before {
+  transform: translateX(14px);
+}
+
+/*
+ * 小提示标签（复用的知识点、长度预设等）。
+ *
+ * 它是夹在两个 `.field` 之间的一行，因此下边距要与字段间距一致（18px）：
+ * 少了它，长度预设会紧贴下一个字段的标签（截图里「服务地址」就挤在标签行下面）。
+ */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 18px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--secondary);
+  background: transparent;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.chip.reuse {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-text);
+}
+
+.chip .chip-tag {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 列表条目：前置知识 / 被依赖 / 疑问来源共用 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list-item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 11px 12px;
+}
+
+.list-item.plain {
+  padding: 0;
+  border: 0;
+}
+
+/* ------------------------------- 启动与备份 ------------------------------- */
+
+.boot {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--secondary);
+}
+
+.boot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

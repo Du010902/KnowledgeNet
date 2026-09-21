@@ -1,0 +1,35 @@
+{
+  /*
+   * Worker 的独立类型检查。
+   *
+   * Worker 里没有 window / document，把它和 DOM 类型混在一起检查会掩盖真实错误
+   * （例如误用 window 却能通过编译）。这里只 include Worker 真正用到的模块，
+   * 并用 WebWorker 标准库替代 DOM：布局内核与拓扑/力的计算本来就不依赖 DOM。
+   *
+   * 主配置（tsconfig.json）仍然检查全部源码，包括这个 Worker 文件，
+   * 因此两侧都不会漏检。
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": [
+    "src/graph3d/d3-force-3d.d.ts",
+    "src/graph3d/types.ts",
+    "src/graph3d/topology.ts",
+    "src/graph3d/forces.ts",
+    "src/graph3d/layoutCore.ts",
+    "src/graph3d/layout.worker.ts"
+  ]
+}

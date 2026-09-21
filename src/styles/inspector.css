@@ -1,0 +1,471 @@
+/* ============================================================================
+   KnowledgeNet · 线程切换器 · 节点检查器 · 健康提示条 · 命令面板
+   ----------------------------------------------------------------------------
+   线程切换器 · 节点检查器 · 健康提示条 · 命令面板
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* ------------------------------ 对话列表 ------------------------------ */
+
+/*
+ * 旧的 `.thread-switcher` / `.thread-trigger`（写着「新对话 1 ⌄」的下拉）
+ * 与 `.thread-popover` 已随「列表收进边栏」一起删除：列表与新建都在边栏的
+ * 「对话」页签里，上下文栏只留一颗图标做入口。
+ * 保留 `.thread-trigger-label` 作为屏幕阅读器文本（视觉上不可见）。
+ */
+
+.thread-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 7px;
+}
+
+.thread-row:hover {
+  background: var(--hover);
+}
+
+.thread-row.active {
+  background: var(--accent-soft);
+}
+
+.thread-row .thread-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+
+.thread-row.active .thread-name {
+  color: var(--accent-text);
+}
+
+.thread-name-text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-summary {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-row .thread-rename {
+  flex: 1;
+  margin: 3px;
+}
+
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 顶部那颗「新对话」：整行宽，比一颗小图标更容易点到 */
+.thread-list-actions {
+  flex: none;
+  padding: 10px 10px 8px;
+}
+
+.thread-new {
+  width: 100%;
+  justify-content: center;
+}
+
+.thread-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 10px;
+}
+
+/* ------------------------------ 侧边栏（对话 / 脉络） ------------------------------ */
+
+/*
+ * 一条边栏，两个页签。对话/分屏里它是对话工作区的一列（`inline`，不遮正文）；
+ * 图谱独占时浮在左侧（`.is-overlay`，带遮罩）。
+ */
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: clamp(300px, 26vw, 380px);
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.side-panel.is-overlay {
+  position: fixed;
+  top: var(--shell-top);
+  bottom: 0;
+  left: var(--rail-w);
+  z-index: 33;
+  width: clamp(320px, 30vw, 420px);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--modal-shadow);
+  animation: slide-in-left 0.16s ease-out;
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+}
+
+.side-scrim {
+  position: fixed;
+  inset: var(--shell-top) 0 0 var(--rail-w);
+  z-index: 32;
+  background: var(--scrim);
+  backdrop-filter: blur(1px);
+}
+
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.side-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.side-panel-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.side-panel-tabs button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.side-panel-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.side-panel-tabs .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* 脉络页签顶部的当前知识点 */
+.side-panel-node {
+  flex: none;
+  padding: 14px 18px 10px;
+}
+
+.side-panel-overline {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.side-panel-node h2 {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  overflow-wrap: anywhere;
+}
+
+.sheet-health {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 20px 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-btn);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.sheet-health .icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* ------------------------------ 健康提示条 ------------------------------ */
+
+.health-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.health-notice.compact {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  padding: 8px 10px;
+}
+
+.health-notice > .icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 2px;
+}
+
+.health-notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.health-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.health-detail {
+  color: var(--secondary);
+}
+
+.health-issues {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.health-issues li {
+  margin-bottom: 3px;
+}
+
+.health-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.health-notice-actions .btn.sm {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.health-notice-actions .btn.sm.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: transparent;
+}
+
+.pill.is-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ------------------------------- 命令面板 ------------------------------- */
+
+/*
+ * 命令面板就是参考图的 `.search-layer` + `.search-dialog`：
+ * 遮罩从两条栏下方开始（不盖顶栏）、居中偏上 8vh、620px 宽、radius 15、
+ * surface-raised 底 + `--shadow`，结果行是三列（图标 / 标题+说明 / 状态）。
+ */
+.palette-scrim {
+  position: fixed;
+  inset: var(--shell-top, 56px) 0 0;
+  z-index: 40;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+}
+
+.command-palette {
+  position: fixed;
+  top: calc(var(--shell-top, 56px) + 8vh);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 32px));
+  max-height: 72vh;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.command-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.command-input-row .icon {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+
+.command-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  outline: none;
+}
+
+.command-prompt-hint {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.command-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.command-group {
+  padding: 7px 9px 5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.command-item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 9px;
+  color: var(--text);
+  text-align: left;
+}
+
+.command-item:hover,
+.command-item.active {
+  background: var(--hover);
+}
+
+/* 结果行的图标格：accent-soft 底 + 圆角 8（参考图 .result-icon） */
+.command-item .result-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.command-item .result-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.command-item.disabled .result-icon {
+  background: var(--hover);
+  color: var(--muted);
+}
+
+.command-item.disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.command-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.command-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-detail {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-status {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.command-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--canvas-soft);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.command-foot .is-warn {
+  color: var(--warning);
+}
+
+/* 库状态条在最上面一行：它出现时不该把工作区挤出窗口 */
+.library-banner {
+  flex: none;
+}

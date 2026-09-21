@@ -1,0 +1,240 @@
+/* ============================================================================
+   KnowledgeNet · 工作区外壳：左侧栏与主区
+   ----------------------------------------------------------------------------
+   工作区外壳：左侧栏与主区
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* ------------------------------- 左：侧栏 ------------------------------- */
+
+/*
+ * 旧的固定左栏（`.sidebar` / `.goal`）已经随「搜索进顶栏、学习目标取消」删除：
+ * 它们的类名在源码里一处都不再出现（验收清单 P2-7 要求清理旧结构样式）。
+ * 下面留下的 `.search` / `.library*` 是导航抽屉在用的那一套。
+ */
+
+.search {
+  position: relative;
+  margin: 20px 2px 21px;
+  flex: none;
+}
+
+.search > .icon {
+  position: absolute;
+  left: 10px;
+  top: 11px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search input {
+  height: 38px;
+  padding: 9px 45px 9px 32px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.search kbd {
+  position: absolute;
+  right: 8px;
+  top: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.library-node {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--secondary);
+  transition: background 0.18s, color 0.18s;
+}
+
+.library-node:hover {
+  background: var(--hover);
+}
+
+.library-node.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.library-node .library-node-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-node .count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* -------------------------------- 中：主区 -------------------------------- */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--canvas);
+}
+
+/*
+ * 图谱视图的上下文栏：当前知识点 + 图规模 + 观察方式 + 这一屏能做的事。
+ * 与对话的上下文栏同一个高度（`--context-h`），切视图时框架不跳动。
+ */
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--context-h);
+  padding: 0 18px 0 22px;
+  flex: none;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.graph-meta {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.graph-spacer {
+  flex: 1;
+}
+
+.graph-actions {
+  gap: 4px;
+}
+
+/* 分段控件：观察方式（聚焦 / 空间） */
+.segments,
+.graph-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--canvas-soft);
+}
+
+.segments button,
+.graph-mode-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+
+.segments button:hover,
+.graph-mode-switch button:hover {
+  color: var(--text);
+}
+
+.segments button.active,
+.graph-mode-switch button.active {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.13);
+}
+
+.segments .icon,
+.graph-mode-switch .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* 文字按钮：低频动作（学习脉络 / 定位 / 适应窗口 / 重新整理） */
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.text-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* 按下态：参考图用 accent-soft 底 + accent-strong 字（面板开着时看得出来） */
+.text-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.text-button .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.main-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 39px;
+  /* 不许被画布挤掉高度：压缩后这一行的文字会折成两行，反而更占地方 */
+  flex: none;
+  padding: 0 25px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.main-footer span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.main-footer .row {
+  flex: none;
+  gap: 6px;
+}
+
+.main-footer .icon {
+  width: 12px;
+  height: 12px;
+}
+

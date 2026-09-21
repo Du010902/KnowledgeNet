@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /*
+     * 用 @/ 指向 src。
+     *
+     * 这里刻意不使用 ../ 这类跨目录相对路径：在本机路径较深时（D:\a\b\c\项目），
+     * TypeScript 6.0.3 会把 src/xxx.ts 里的 "../data" 解析到项目根目录下的 data，
+     * 而不是 src/data，导致 TS2307「找不到模块」。
+     * 该问题与源码无关，换成路径别名后不再触发；Vite 侧用 resolve.alias 对应。
+     *
+     * 不设置 baseUrl：它在 TypeScript 6 中已废弃，而 paths 自 TS 4.1 起可独立使用。
+     */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

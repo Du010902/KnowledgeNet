@@ -1,0 +1,428 @@
+/* ============================================================================
+   KnowledgeNet · 响应式断点
+   ----------------------------------------------------------------------------
+   窗口变窄时的全部覆盖规则（必须排在其它样式之后）
+   由 src/styles.css 按小节边界拆分而来：段内内容与顺序都没有改动，
+   导入顺序见 src/main.tsx（响应式那一份排在最后，覆盖才生效）。
+   ========================================================================== */
+
+/* ------------------------------- 响应式 ------------------------------- */
+
+/*
+ * 断点只定义一次，且只在这里定义：组件不判断窗口宽度，
+ * 唯一的例外是「< 740px 不显示硬分屏」——那条规则必须让 JS 与 CSS 用同一个数字，
+ * 所以两边都写成 740px，并在注释里互相指明。
+ */
+
+/* 大屏：适度放宽，但不要把文字缩到不可读 */
+@media (min-width: 1600px) {
+  .graph-toolbar {
+    padding: 0 24px 0 26px;
+  }
+  .conversation-reader {
+    padding: 34px 40px 12px;
+  }
+  .conversation-composer {
+    padding: 10px 40px 16px;
+  }
+}
+
+@media (max-width: 1240px) {
+  .topbar {
+    gap: 10px;
+    padding: 0 12px 0 14px;
+  }
+  .graph-node {
+    width: 158px;
+    padding: 12px;
+  }
+  .graph-node.selected {
+    width: 176px;
+  }
+  .graph-node-title {
+    font-size: 13px;
+  }
+  .graph-node.selected .graph-node-title {
+    font-size: 14px;
+  }
+  .conversation-reader {
+    padding: 24px 24px 10px;
+  }
+  .conversation-composer {
+    padding: 10px 24px 14px;
+  }
+  .nav-drawer {
+    width: min(318px, 88vw);
+  }
+  .side-panel.is-overlay {
+    width: clamp(320px, 38vw, 420px);
+  }
+}
+
+/*
+ * ≤1100px：全局栏收起文字，只留图标。
+ *
+ * 规范 §6 的分档：品牌文字、知识库名、搜索框里的提示与快捷键、保存文案都可以收，
+ * 主视图标签与搜索本身必须留着——它们是这一栏的全部意义。
+ */
+@media (max-width: 1100px) {
+  .brand-text,
+  .library-button span,
+  .search-label,
+  .search-trigger kbd,
+  .top-save span,
+  .graph-meta {
+    display: none;
+  }
+  .library-button {
+    width: 34px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+  .search-trigger {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    padding: 0;
+  }
+  .top-save {
+    margin: 0 4px;
+  }
+}
+
+/* ≤1040px：内容区两侧留白收紧一档 */
+@media (max-width: 1040px) {
+  .graph-toolbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .conversation-reader {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .conversation-composer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/*
+ * ≤880px：分屏改为上下堆叠。
+ * 组件用的是同一条媒体查询 `(orientation: portrait), (max-width: 880px)`，
+ * 两者必须一致，否则会出现「JS 认为是横的、样式按竖的排版」。
+ */
+@media (max-width: 880px) {
+  /* 窄下来时边栏不再占一列：浮在对话上，点外面关闭 */
+  .side-panel:not(.is-overlay) {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 12;
+    width: min(300px, 78vw);
+    box-shadow: var(--shadow-focus);
+  }
+  .conversation-column {
+    max-width: 100%;
+  }
+}
+
+/* ≤740px：不显示硬分屏（组件退化为单窗格切换，见 useNarrowLayout） */
+@media (max-width: 740px) {
+  .app {
+    min-height: 520px;
+  }
+  /*
+   * 工作区仍然只有一列：活动栏已经去掉，这里不再留 44px 的空列。
+   * `--rail-w` 保持 0，覆盖层因此贴着窗口左边。
+   */
+  :root {
+    --rail-w: 0px;
+    --appbar-h: 52px;
+    --context-h: 46px;
+  }
+  .topbar {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    padding: 0 8px 0 10px;
+  }
+  .brand {
+    font-size: 15px;
+  }
+  /* 窄屏只留品牌图标、两个主视图、搜索与设置 */
+  .library-button,
+  .top-save,
+  .top-actions .icon-btn[aria-label^="切换为"] {
+    display: none;
+  }
+  .view-tabs {
+    justify-self: center;
+  }
+  .mode-switcher {
+    gap: 14px;
+  }
+  .mode-switcher button {
+    gap: 5px;
+    padding: 0 2px;
+    /* 参考图在 ≤720px 仍然保留「对话 / 图谱」文字，只把字号收到 13px：
+       主视图是这一栏的主角，退化成一排图标就看不出现在在哪一档了 */
+    font-size: 13px;
+  }
+  .graph-toolbar {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .graph-actions .text-button span {
+    display: none;
+  }
+  .graph-actions .text-button {
+    padding: 0 8px;
+  }
+  /* 名称密度已经收进「视图设置」菜单，这里不再需要单独的窄屏规则 */
+  .graph-legend {
+    right: 12px;
+    bottom: 14px;
+    gap: 9px;
+  }
+  /* 说明条与节点卡片在窄屏上更容易撞在一起：把它压小一圈，别再叠到卡片上 */
+  .selection-label {
+    top: 10px;
+    left: 12px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+  .canvas-controls {
+    left: 12px;
+  }
+  .main-footer {
+    padding: 0 14px;
+  }
+  .main-footer .footer-right {
+    display: none;
+  }
+  .graph-label {
+    left: 15px;
+  }
+  .conversation-reader {
+    padding: 18px 16px 8px;
+  }
+  .conversation-composer {
+    padding: 8px 12px 12px;
+  }
+  .node-context-row {
+    gap: 6px;
+    padding: 0 12px;
+  }
+  .node-title {
+    font-size: 14px;
+  }
+  .nav-drawer {
+    width: min(300px, 94vw);
+  }
+  /*
+   * 手机宽度：边栏铺满（不管是对话里那一列还是图谱上的浮层）——
+   * 留一条 8vw 的缝既点不到也没意义。
+   */
+  .side-panel,
+  .side-panel.is-overlay,
+  .side-panel:not(.is-overlay) {
+    position: fixed;
+    top: var(--shell-top);
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 33;
+    box-shadow: var(--modal-shadow);
+  }
+  .narrow-hint {
+    display: block;
+  }
+}
+
+@media (max-width: 460px) {
+  .brand {
+    gap: 7px;
+    font-size: 14px;
+  }
+  .brand-mark {
+    width: 26px;
+    height: 26px;
+  }
+  /* 手机宽度放不下「对话 / 图谱」两段文字：这时才退回图标 */
+  .mode-switcher button span {
+    display: none;
+  }
+  .mode-switcher {
+    gap: 8px;
+  }
+  .segments button {
+    gap: 4px;
+    padding: 6px 7px;
+  }
+  .graph-node {
+    width: 126px;
+    min-height: 74px;
+    padding: 10px;
+  }
+  .graph-node.selected {
+    width: 147px;
+  }
+  .graph-node-title {
+    font-size: 12px;
+  }
+  .graph-node.selected .graph-node-title {
+    font-size: 13px;
+  }
+  .graph-node-icon {
+    display: none;
+  }
+  .graph-node-info {
+    font-size: 12px;
+  }
+  .graph-toolbar {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .graph-legend span:first-child {
+    display: none;
+  }
+  .canvas-controls .icon-btn {
+    width: 26px;
+    height: 28px;
+  }
+  .dialog-head,
+  .dialog-body {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .dialog-foot {
+    padding: 15px 20px;
+  }
+  .field-row.grid-2 {
+    gap: 10px;
+  }
+}
+
+/* 再窄就退回单列：两列各两百来像素时，标签与输入框都会挤成两行 */
+@media (max-width: 620px) {
+  .dialog .field-row.grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============================================================================
+   分屏窗格内的「窄」：按窗格宽度而不是窗口宽度
+   ----------------------------------------------------------------------------
+   分屏时每个窗格只有窗口的一半宽，但窗口本身还在断点之上。
+   下面的规则和 ≤740px 那一段是同一套取舍（收文字、留图标），
+   只不过判据换成了 `.split-slot` 自己的宽度（见 panels.css 的容器声明）。
+   ========================================================================== */
+
+@container pane (max-width: 900px) {
+  /* 图规模那行元数据最先让位：它只是补充信息 */
+  .graph-meta {
+    display: none;
+  }
+  /* 文字按钮退成图标按钮（「定位当前」「适应窗口」） */
+  .graph-actions .text-button span {
+    display: none;
+  }
+  .graph-actions .text-button {
+    padding: 0 8px;
+  }
+}
+
+@container pane (max-width: 760px) {
+  /* 对话这一侧：状态只留圆点，「学习脉络 / 节点操作」退成图标 */
+  .learning-status span,
+  .learning-status .chevron {
+    display: none;
+  }
+  .context-actions .text-button span {
+    display: none;
+  }
+  .context-actions .text-button {
+    padding: 0 8px;
+  }
+  .node-title {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   知识库生命周期界面
+   --------------------------------------------------------------------------
+   库选择、库弹窗、只读/演示提示条、回收站与完整性报告。
+   颜色一律取自上面的 CSS 变量，组件里不写任何色值。
+   ========================================================================== */
+
+/* 紧凑按钮（弹窗与面板里的小操作） */
+.btn.sm {
+  padding: 4px 9px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* 只读 / 演示 的标签：两种「这次操作落到哪里」的警告都用同一套语义色 */
+.pill.is-readonly {
+  background: var(--hover);
+  color: var(--secondary);
+}
+
+.pill.is-warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.pill .icon {
+  width: 11px;
+  height: 11px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.field-note {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+/* 删除对话框里的备份回执：整段路径要能一眼找到、能选中复制 */
+.backup-note {
+  margin-top: 7px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--secondary);
+  background: var(--accent-soft);
+  border-radius: var(--radius-btn);
+}
+
+.backup-note code {
+  display: inline-block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-text);
+  word-break: break-all;
+  cursor: text;
+  user-select: all;
+}
+
